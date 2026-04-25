@@ -1,97 +1,63 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# 📔 Memora (메모라)
 
-# Getting Started
+> **"당신의 소중한 순간을 AI가 문장으로 엮어드립니다."**
+>
+> 사진의 메타데이터와 사용자의 감정을 결합한 AI 자동 일기 생성 서비스
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+---
 
-## Step 1: Start Metro
+## ✨ 핵심 기능 (Core Features)
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+4/29 MVP v1.0 기준 구현 완료된 기능입니다.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+1. **AI 일기 초안 생성 (Generative AI)**
+   - OpenRouter(Google Gemini 2.5 Flash) 연동
+   - 기분, 사진 정보, 사용자 메모를 조합한 개인화된 서사 생성
+2. **사진 메타데이터 추출 (Native Module)**
+   - Android 10+ 의 GPS 마스킹 우회를 위한 커스텀 Kotlin 네이티브 브릿지 구현
+   - `MediaStore.setRequireOriginal()` + `ExifInterface`로 사진의 촬영 장소(GPS) 및 시간 데이터 자동 추출
+   - 사진 EXIF에 GPS가 없을 시 디바이스 현재 GPS로 fallback, 출처(`locationSource`)는 항상 기록
+3. **3단계 위저드 작성 플로우**
+   - 감정 선택 → 사진/메모 입력 → AI 결과 확인 및 수정
+4. **로컬 데이터 관리 (Persistence)**
+   - `AsyncStorage`를 이용한 일기 CRUD 및 목록 조회 (`useFocusEffect`로 화면 포커스 시 자동 갱신)
 
-```sh
-# Using npm
-npm start
+## 🛠 Tech Stack
 
-# OR using Yarn
-yarn start
+- **Frontend:** React Native 0.85 (TypeScript) + React Navigation
+- **AI Engine:** Google Gemini 2.5 Flash (via OpenRouter API, axios)
+- **Local Storage:** AsyncStorage
+- **Image Picker:** `react-native-image-crop-picker` (iOS) + 자체 Kotlin 네이티브 모듈 (Android)
+- **Location:** `@react-native-community/geolocation`
+- **Native:** Kotlin (Android Native Module)
+- **Env:** `react-native-dotenv`
+
+## 👥 Team Members
+
+- **황민솔**: 전반적인 시스템 아키텍처 설계, 네이티브 모듈 구현, AI 및 데이터 계층 연동
+- **임재민**: 사용자 경험 설계(Figma), UI 컴포넌트 고도화 및 디자인 시스템 적용
+
+## 🚀 시작하기 (Getting Started)
+
+### 1. 의존성 설치
+
+```bash
+npm install
 ```
 
-## Step 2: Build and run your app
+### 2. 환경 변수 설정
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+루트 폴더에 `.env` 파일을 생성하고 아래 키를 입력하세요.
 
-### Android
+```text
+OPENROUTER_API_KEY=your_api_key_here
+```
 
-```sh
-# Using npm
+### 3. 안드로이드 실행
+
+```bash
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+> 처음 빌드는 Kotlin 네이티브 모듈 컴파일로 다소 시간이 걸릴 수 있습니다.
+> Metro 캐시 이슈가 있으면 `npx react-native start --reset-cache` 후 다시 시도하세요.
