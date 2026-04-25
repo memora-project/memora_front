@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,77 +6,74 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { HomeScreenProps } from '../navigation/AppNavigator';
+import { useFocusEffect } from '@react-navigation/native';
 
-type ListEntry = {
-  id: string;
-  date: string;
-  summary: string;
-  mood: { emoji: string; label: string };
-  content: string;
-  photoUri?: string;
+import type { HomeScreenProps } from '../navigation/AppNavigator';
+import { getAllDiaries, type DiaryEntry } from '../storage/diaryStorage';
+
+const formatDate = (iso: string): string => {
+  // ISO("2026-04-26T05:21:00.000Z") → "2026-04-26"
+  return iso.slice(0, 10);
 };
 
-const DATA: ListEntry[] = [
-  {
-    id: '1',
-    date: '2026-04-26',
-    summary: '오늘은 NestJS 백엔드 설계를 시작했다. 새로운 도전이 기대된다.',
-    mood: { emoji: '😊', label: '최고에요' },
-    content:
-      '오늘은 NestJS 백엔드 설계를 시작했다. 새로운 도전이 기대된다. 모듈 구조를 어떻게 잡을지 한참 고민했다.',
-  },
-  {
-    id: '2',
-    date: '2026-04-25',
-    summary: '자바 17 환경 설정을 마무리했다. 드디어 개발 환경이 갖춰졌다.',
-    mood: { emoji: '😌', label: '평온해요' },
-    content:
-      '자바 17 환경 설정을 마무리했다. 드디어 개발 환경이 갖춰졌다. 작은 일이지만 성취감이 있다.',
-  },
-  {
-    id: '3',
-    date: '2026-04-24',
-    summary: '첫 번째 메모를 남기며 새로운 일기 앱과 함께하는 여정을 시작했다.',
-    mood: { emoji: '🤔', label: '저도 모르겠어요' },
-    content:
-      '첫 번째 메모를 남기며 새로운 일기 앱과 함께하는 여정을 시작했다. 무엇을 적어야 할지 막막하지만, 작은 한 걸음부터.',
-  },
-];
-
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const handleOpenDetail = (entry: ListEntry) => {
-    navigation.navigate('Detail', {
-      entry: {
-        id: entry.id,
-        date: entry.date,
-        mood: entry.mood,
-        photoUri: entry.photoUri,
-        content: entry.content,
-      },
-    });
+  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 화면이 포커스될 때마다 (저장 후 돌아왔을 때 포함) 최신 목록을 다시 가져온다.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        setIsLoading(true);
+        try {
+          const list = await getAllDiaries();
+          if (!cancelled) setEntries(list);
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  const handleOpenDetail = (entry: DiaryEntry) => {
+    navigation.navigate('Detail', { entryId: entry.id });
   };
 
   const handleWriteNew = () => {
     navigation.navigate('MidDiary');
   };
 
-  const renderItem = ({ item }: { item: ListEntry }) => (
+  const renderItem = ({ item }: { item: DiaryEntry }) => (
     <TouchableOpacity
       style={styles.item}
       activeOpacity={0.85}
       onPress={() => handleOpenDetail(item)}
     >
       <View style={styles.itemHeader}>
-        <Text style={styles.itemDate}>{item.date}</Text>
-        <Text style={styles.itemMood}>{item.mood.emoji}</Text>
+        <Text style={styles.itemDate}>{formatDate(item.createdAt)}</Text>
+        {item.mood && <Text style={styles.itemMood}>{item.mood.emoji}</Text>}
       </View>
       <Text style={styles.itemSummary} numberOfLines={2}>
-        {item.summary}
+        {item.content}
       </Text>
     </TouchableOpacity>
+  );
+
+  const renderEmpty = () => (
+    <View style={styles.emptyWrap}>
+      <Text style={styles.emptyEmoji}>📔</Text>
+      <Text style={styles.emptyTitle}>첫 일기를 작성해 보세요!</Text>
+      <Text style={styles.emptySubtitle}>
+        오른쪽 아래 + 버튼을 눌러 오늘의 마음을 담아보세요
+      </Text>
+    </View>
   );
 
   return (
@@ -87,13 +84,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <Text style={styles.headerSubtitle}>오늘의 마음을 기록해 보세요</Text>
       </View>
 
-      <FlatList
-        data={DATA}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color="#2C2A28" />
+        </View>
+      ) : (
+        <FlatList
+          data={entries}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={[
+            styles.listContent,
+            entries.length === 0 && styles.listContentEmpty,
+          ]}
+          ListEmptyComponent={renderEmpty}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <TouchableOpacity
         style={styles.fab}
@@ -127,10 +134,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8A857F',
   },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   listContent: {
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 120,
+  },
+  listContentEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   item: {
     backgroundColor: '#FFFFFF',
@@ -161,6 +177,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#3D3A37',
     lineHeight: 22,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyEmoji: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#3D3A37',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#8A857F',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   fab: {
     position: 'absolute',

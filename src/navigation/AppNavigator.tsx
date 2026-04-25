@@ -9,18 +9,10 @@ import HomeScreen from '../screens/HomeScreen';
 import MidDiaryScreen from '../screens/MidDiaryScreen';
 import DetailScreen from '../screens/DetailScreen';
 
-export type DiaryEntry = {
-  id: string;
-  date: string;
-  mood?: { emoji: string; label: string };
-  photoUri?: string;
-  content: string;
-};
-
 export type RootStackParamList = {
   Home: undefined;
   MidDiary: undefined;
-  Detail: { entry: DiaryEntry };
+  Detail: { entryId: string };
 };
 
 export type HomeScreenProps = NativeStackScreenProps<RootStackParamList, 'Home'>;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,101 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+
 import type { DetailScreenProps } from '../navigation/AppNavigator';
+import {
+  getDiaryById,
+  deleteDiary,
+  type DiaryEntry,
+} from '../storage/diaryStorage';
+
+const formatDate = (iso: string): string => iso.slice(0, 10);
 
 const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
-  const { entry } = route.params;
+  const { entryId } = route.params;
+  const [entry, setEntry] = useState<DiaryEntry | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // 화면 포커스 시 storage에서 다시 읽음 (편집 후 돌아왔을 때 등 대비)
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        setIsLoading(true);
+        try {
+          const found = await getDiaryById(entryId);
+          if (!cancelled) setEntry(found);
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [entryId]),
+  );
+
+  const handleDelete = () => {
+    Alert.alert(
+      '일기를 삭제할까요?',
+      '한 번 삭제한 일기는 다시 되돌릴 수 없어요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await deleteDiary(entryId);
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert(
+                '삭제 실패',
+                e?.message ?? '알 수 없는 오류가 발생했어요.',
+              );
+              setIsDeleting(false);
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.centerWrap}>
+          <ActivityIndicator color="#2C2A28" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!entry) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backIcon}>‹</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.centerWrap}>
+          <Text style={styles.notFoundText}>일기를 찾을 수 없어요.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -26,6 +115,22 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteButton}
+          activeOpacity={0.7}
+          disabled={isDeleting}
+          onPress={handleDelete}
+        >
+          <Text
+            style={[
+              styles.deleteText,
+              isDeleting && { opacity: 0.4 },
+            ]}
+          >
+            삭제
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -33,7 +138,7 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerBlock}>
-          <Text style={styles.date}>{entry.date}</Text>
+          <Text style={styles.date}>{formatDate(entry.createdAt)}</Text>
           {entry.mood && (
             <View style={styles.moodPill}>
               <Text style={styles.moodEmoji}>{entry.mood.emoji}</Text>
@@ -55,6 +160,25 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
           </View>
         )}
 
+        {(entry.takenAt || entry.locationLabel !== '위치 정보 없음') && (
+          <View style={styles.metaRow}>
+            {entry.takenAt && (
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipLabel}>📅</Text>
+                <Text style={styles.metaChipValue}>
+                  {entry.takenAt.slice(0, 10)}
+                </Text>
+              </View>
+            )}
+            {entry.locationLabel !== '위치 정보 없음' && (
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipLabel}>📍</Text>
+                <Text style={styles.metaChipValue}>{entry.locationLabel}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         <View style={styles.contentCard}>
           <Text style={styles.content}>{entry.content}</Text>
         </View>
@@ -68,7 +192,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAF8F5',
   },
+  centerWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notFoundText: {
+    fontSize: 15,
+    color: '#8A857F',
+  },
   topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -83,6 +219,15 @@ const styles = StyleSheet.create({
     color: '#2C2A28',
     lineHeight: 32,
     fontWeight: '300',
+  },
+  deleteButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  deleteText: {
+    fontSize: 14,
+    color: '#C0392B',
+    fontWeight: '500',
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -126,7 +271,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 240,
     borderRadius: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     backgroundColor: '#EFEAE3',
   },
   photoPlaceholder: {
@@ -141,6 +286,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     color: '#A09B95',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    gap: 4,
+  },
+  metaChipLabel: {
+    fontSize: 12,
+  },
+  metaChipValue: {
+    fontSize: 12,
+    color: '#3D3A37',
   },
   contentCard: {
     backgroundColor: '#FFFFFF',

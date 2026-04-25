@@ -24,6 +24,7 @@ import Geolocation from '@react-native-community/geolocation';
 import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
 import { pickImageWithExif } from '../native/PhotoExif';
 import { generateAIDraft } from '../api/openrouter';
+import { saveDiary } from '../storage/diaryStorage';
 
 /**
  * 필요한 권한 (네이티브 빌드 시 설정)
@@ -479,14 +480,29 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleSave = () => {
-    // TODO: AsyncStorage / DB에 일기 저장
-    Alert.alert('저장 완료', '오늘의 기록이 저장되었어요.', [
-      {
-        text: '확인',
-        onPress: () => navigation.navigate('Home'),
-      },
-    ]);
+  const handleSave = async () => {
+    const trimmed = diaryText.trim();
+    if (!trimmed) {
+      Alert.alert('내용이 비어있어요', '한 줄이라도 작성한 뒤 저장해주세요.');
+      return;
+    }
+
+    try {
+      await saveDiary({
+        mood: selectedMood,
+        content: trimmed,
+        photoUri: photoMetadata?.uri ?? null,
+        takenAt: photoMetadata?.takenAt ?? null,
+        latitude: photoMetadata?.latitude ?? null,
+        longitude: photoMetadata?.longitude ?? null,
+        locationLabel: photoMetadata?.locationLabel ?? '위치 정보 없음',
+        locationSource: photoMetadata?.locationSource ?? 'none',
+      });
+      // 저장 직후 바로 Home으로 (Home의 useFocusEffect가 새 목록을 가져옴)
+      navigation.navigate('Home');
+    } catch (e: any) {
+      Alert.alert('저장 실패', e?.message ?? '알 수 없는 오류가 발생했어요.');
+    }
   };
 
   const handleEditMenu = () => {
