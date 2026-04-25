@@ -8,49 +8,62 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { HomeScreenProps } from '../navigation/AppNavigator';
 
-type DiaryEntry = {
+type ListEntry = {
   id: string;
   date: string;
   summary: string;
-  mood: string;
+  mood: { emoji: string; label: string };
+  content: string;
+  photoUri?: string;
 };
 
-type HomeScreenProps = {
-  navigation?: { navigate: (screen: string, params?: object) => void };
-};
-
-const DATA: DiaryEntry[] = [
+const DATA: ListEntry[] = [
   {
     id: '1',
     date: '2026-04-26',
     summary: '오늘은 NestJS 백엔드 설계를 시작했다. 새로운 도전이 기대된다.',
-    mood: '😊',
+    mood: { emoji: '😊', label: '최고에요' },
+    content:
+      '오늘은 NestJS 백엔드 설계를 시작했다. 새로운 도전이 기대된다. 모듈 구조를 어떻게 잡을지 한참 고민했다.',
   },
   {
     id: '2',
     date: '2026-04-25',
     summary: '자바 17 환경 설정을 마무리했다. 드디어 개발 환경이 갖춰졌다.',
-    mood: '😌',
+    mood: { emoji: '😌', label: '평온해요' },
+    content:
+      '자바 17 환경 설정을 마무리했다. 드디어 개발 환경이 갖춰졌다. 작은 일이지만 성취감이 있다.',
   },
   {
     id: '3',
     date: '2026-04-24',
     summary: '첫 번째 메모를 남기며 새로운 일기 앱과 함께하는 여정을 시작했다.',
-    mood: '🤔',
+    mood: { emoji: '🤔', label: '저도 모르겠어요' },
+    content:
+      '첫 번째 메모를 남기며 새로운 일기 앱과 함께하는 여정을 시작했다. 무엇을 적어야 할지 막막하지만, 작은 한 걸음부터.',
   },
 ];
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const handleOpenDetail = (entry: DiaryEntry) => {
-    navigation?.navigate('Detail', { entry });
+  const handleOpenDetail = (entry: ListEntry) => {
+    navigation.navigate('Detail', {
+      entry: {
+        id: entry.id,
+        date: entry.date,
+        mood: entry.mood,
+        photoUri: entry.photoUri,
+        content: entry.content,
+      },
+    });
   };
 
   const handleWriteNew = () => {
-    navigation?.navigate('MidDiary');
+    navigation.navigate('MidDiary');
   };
 
-  const renderItem = ({ item }: { item: DiaryEntry }) => (
+  const renderItem = ({ item }: { item: ListEntry }) => (
     <TouchableOpacity
       style={styles.item}
       activeOpacity={0.85}
@@ -58,7 +71,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     >
       <View style={styles.itemHeader}>
         <Text style={styles.itemDate}>{item.date}</Text>
-        <Text style={styles.itemMood}>{item.mood}</Text>
+        <Text style={styles.itemMood}>{item.mood.emoji}</Text>
       </View>
       <Text style={styles.itemSummary} numberOfLines={2}>
         {item.summary}

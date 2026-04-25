@@ -9,31 +9,10 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-type DiaryEntry = {
-  id: string;
-  date: string;
-  mood?: { emoji: string; label: string };
-  photoUri?: string;
-  content: string;
-};
-
-type DetailScreenProps = {
-  navigation?: { goBack: () => void };
-  route?: { params?: { entry?: DiaryEntry } };
-};
-
-const FALLBACK_ENTRY: DiaryEntry = {
-  id: 'preview',
-  date: '2026-04-26',
-  mood: { emoji: '😌', label: '평온해요' },
-  photoUri: undefined,
-  content:
-    '오늘은 오랜만에 한가로운 오후를 보냈다. 창문 너머로 들어오는 봄바람이 부드럽게 뺨을 스쳤고, 따뜻한 차 한 잔과 함께 책을 읽었다.\n\n바쁘게 지내던 일상에서 잠시 벗어나 나만의 시간을 가지니, 그동안 잊고 있던 작은 것들이 다시 눈에 들어왔다. 이런 평범한 순간이 얼마나 소중한지 새삼 느낀다.',
-};
+import type { DetailScreenProps } from '../navigation/AppNavigator';
 
 const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
-  const entry = route?.params?.entry ?? FALLBACK_ENTRY;
+  const { entry } = route.params;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -43,7 +22,7 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={0.7}
-          onPress={() => navigation?.goBack()}
+          onPress={() => navigation.goBack()}
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
