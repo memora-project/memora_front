@@ -23,6 +23,7 @@ import Geolocation from '@react-native-community/geolocation';
 
 import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
 import { pickImageWithExif } from '../native/PhotoExif';
+import { generateAIDraft } from '../api/openrouter';
 
 /**
  * 필요한 권한 (네이티브 빌드 시 설정)
@@ -214,87 +215,50 @@ const getDeviceLocation = async (): Promise<DeviceCoords | null> => {
   });
 };
 
-interface AIDraftLocation {
-  latitude: number | null;
-  longitude: number | null;
-  label: string;
-  source: 'photo' | 'device' | 'none';
-}
-
-// TODO: OpenRouter API 연동. 지금은 콘솔 로그 + mock 응답.
-const generateAIDraft = async (
-  mood: Mood | null,
-  time: string | null,
-  location: AIDraftLocation | null,
-): Promise<string> => {
-  console.log('AI에게 보낼 데이터:', { mood, time, location });
-
-  // mock 답변
-  await new Promise(resolve => setTimeout(resolve, 600));
-
-  const moodLine = mood
-    ? `오늘은 ${mood.emoji} ${mood.label}한 하루였다.`
-    : '오늘 하루를 돌아본다.';
-
-  const timeLine = time
-    ? `\n\n${time.split('T')[0]}, 그 순간의 공기가 아직 마음에 남아 있다.`
-    : '';
-
-  const hasCoords =
-    location && location.latitude !== null && location.longitude !== null;
-
-  const locationLine = hasCoords
-    ? `\n\n그곳의 풍경은 위도 ${location!.latitude!.toFixed(
-        4,
-      )}, 경도 ${location!.longitude!.toFixed(
-        4,
-      )}—사진 한 장이지만 그 자리의 온도와 빛이 떠오른다.`
-    : '';
-
-  return (
-    `${moodLine}${timeLine}${locationLine}\n\n` +
-    '바쁜 일상 속에서도 잠시 멈춰 나의 마음을 들여다보는 시간을 가졌다. ' +
-    '작은 감정 하나하나가 모여 오늘의 나를 만든다는 사실을, 다시 한 번 깨달았다.'
-  );
-};
 
 const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const [step, setStep] = useState<Step>(1);
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [photoMetadata, setPhotoMetadata] = useState<PhotoMetadata | null>(null);
+  const [shortMemo, setShortMemo] = useState<string>('');
   const [diaryText, setDiaryText] = useState<string>('');
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Step 3 진입 시 AI 초안 생성
+  // Step 3 진입 시 AI 초안 생성 (OpenRouter 호출)
   useEffect(() => {
     if (step !== 3 || diaryText) return;
 
     let cancelled = false;
     (async () => {
       setIsGenerating(true);
-      const draft = await generateAIDraft(
-        selectedMood,
-        photoMetadata?.takenAt ?? null,
-        photoMetadata
-          ? {
-              latitude: photoMetadata.latitude,
-              longitude: photoMetadata.longitude,
-              label: photoMetadata.locationLabel,
-              source: photoMetadata.locationSource,
-            }
-          : null,
-      );
-      if (!cancelled) {
-        setDiaryText(draft);
-        setIsGenerating(false);
+      try {
+        const draft = await generateAIDraft({
+          moodLabel: selectedMood?.label ?? null,
+          takenAt: photoMetadata?.takenAt ?? null,
+          locationLabel: photoMetadata?.locationLabel ?? '위치 정보 없음',
+          shortMemo,
+        });
+        if (!cancelled) setDiaryText(draft);
+      } catch (e: any) {
+        console.warn('AI 초안 생성 실패:', e);
+        if (!cancelled) {
+          Alert.alert(
+            'AI 초안을 만들지 못했어요',
+            `${e?.message ?? '알 수 없는 오류'}\n\n직접 작성해주세요.`,
+          );
+          // 빈 입력창으로 유도 — 사용자가 바로 직접 쓸 수 있게
+          setDiaryText('');
+        }
+      } finally {
+        if (!cancelled) setIsGenerating(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [step, diaryText, selectedMood, photoMetadata]);
+  }, [step, diaryText, selectedMood, photoMetadata, shortMemo]);
 
   const handleMoodSelect = (mood: Mood | null) => {
     setSelectedMood(mood);
@@ -372,7 +336,6 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const handlePhotoPick = async (source: 'camera' | 'gallery' | 'skip') => {
     if (source === 'skip') {
       setPhotoMetadata(null);
-      setStep(3);
       return;
     }
 
@@ -510,7 +473,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       });
 
       setPhotoMetadata(metadata);
-      setStep(3);
+      // 사진/메타데이터만 세팅하고 step은 그대로 — 사용자가 한 줄 메모 입력 후 "다음" 버튼으로 진행
     } finally {
       setIsPickingPhoto(false);
     }
@@ -588,7 +551,11 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   );
 
   const renderStep2 = () => (
-    <View style={styles.stepContainer}>
+    <KeyboardAvoidingView
+      style={styles.stepContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+    >
       <Text style={styles.title}>오늘의 한 장면</Text>
       <Text style={styles.subtitle}>마음에 남은 사진이 있다면 함께 담아보세요</Text>
 
@@ -634,20 +601,51 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
 
       {isPickingPhoto && !photoMetadata?.uri && (
         <ActivityIndicator
-          style={{ marginTop: 24 }}
+          style={{ marginTop: 16 }}
           color="#2C2A28"
           size="small"
         />
       )}
 
-      <TouchableOpacity
-        style={styles.skipButton}
-        disabled={isPickingPhoto}
-        onPress={() => handlePhotoPick('skip')}
-      >
-        <Text style={styles.skipText}>사진 선택 안 함</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.memoBlock}>
+        <Text style={styles.memoLabel}>
+          오늘 무슨 일이 있었나요? (키워드나 한 줄 메모)
+        </Text>
+        <TextInput
+          style={styles.memoInput}
+          value={shortMemo}
+          onChangeText={setShortMemo}
+          placeholder="예) 오랜만에 동네 산책, 손주가 보고 싶은 날"
+          placeholderTextColor="#B8B3AC"
+          // RN 0.85 + Fabric(New Arch)에서 single-line TextInput이 Android 한글
+          // IME 조합을 깨는 버그가 있다. multiline=true로 두면 IME 처리 경로가
+          // 달라져 정상 입력됨. 한 줄 메모지만 시각적으로만 한 줄처럼 보이도록 처리.
+          multiline
+          numberOfLines={1}
+          blurOnSubmit
+          returnKeyType="done"
+        />
+      </View>
+
+      <View style={styles.step2Actions}>
+        <TouchableOpacity
+          style={styles.skipInlineButton}
+          disabled={isPickingPhoto}
+          onPress={() => handlePhotoPick('skip')}
+        >
+          <Text style={styles.skipText}>사진 선택 안 함</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.nextButton, isPickingPhoto && { opacity: 0.5 }]}
+          activeOpacity={0.85}
+          disabled={isPickingPhoto}
+          onPress={() => setStep(3)}
+        >
+          <Text style={styles.nextButtonText}>다음</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 
   const renderStep3 = () => (
@@ -671,7 +669,9 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       {isGenerating ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color="#2C2A28" />
-          <Text style={styles.loadingText}>AI가 초안을 작성 중이에요...</Text>
+          <Text style={styles.loadingText}>
+            AI가 오늘의 기억을 문장으로 엮고 있어요...
+          </Text>
         </View>
       ) : (
         <TextInput
@@ -860,6 +860,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8A857F',
     textDecorationLine: 'underline',
+  },
+  memoBlock: {
+    marginTop: 28,
+  },
+  memoLabel: {
+    fontSize: 14,
+    color: '#3D3A37',
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+  memoInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#2C2A28',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  step2Actions: {
+    marginTop: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  skipInlineButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  nextButton: {
+    flex: 1,
+    backgroundColor: '#2C2A28',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   previewPhoto: {
     width: '100%',
