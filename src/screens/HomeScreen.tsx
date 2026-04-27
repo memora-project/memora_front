@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import AppHeader from '../components/AppHeader';
 
 import type { HomeScreenProps } from '../navigation/AppNavigator';
 import { getAllDiaries, type DiaryEntry } from '../storage/diaryStorage';
@@ -79,10 +80,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FAF8F5" />
-      <View style={styles.headerWrap}>
-        <Text style={styles.headerTitle}>Memora</Text>
-        <Text style={styles.headerSubtitle}>오늘의 마음을 기록해 보세요</Text>
-      </View>
+      <AppHeader />
 
       {isLoading ? (
         <View style={styles.loadingWrap}>
