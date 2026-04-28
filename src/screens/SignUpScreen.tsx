@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import type { SignUpScreenProps } from '../navigation/AppNavigator';
+import DistrictPicker from '../components/DistrictPicker';
+import type { District } from '../constants/districts';
 
 const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -19,7 +21,8 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [addressValue, setAddressValue] = useState('');   // 'yuseong-bongmyeong'
+  const [addressLabel, setAddressLabel] = useState('');   // '유성구 봉명동'
   const [emergencyContact, setEmergencyContact] = useState('');
   const [reportShareAgreed, setReportShareAgreed] = useState(false);
 
@@ -48,9 +51,9 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       Alert.alert('알림', '전화번호를 입력해 주세요.');
       return;
     }
-    if (!address.trim()) {
-      Alert.alert('알림', '주소를 입력해 주세요.');
-      return;
+    if (!addressValue) {
+        Alert.alert('알림', '주소(동네)를 선택해 주세요.');
+        return;
     }
 
     Alert.alert(
@@ -172,18 +175,17 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
         {/* 주소 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+        <Text style={styles.inputLabel}>
             주소 (대전 내 동네) <Text style={styles.required}>*</Text>
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="예: 유성구 봉명동"
-            placeholderTextColor="#B5AFA8"
-            multiline
-            numberOfLines={1}
-          />
+        </Text>
+        <DistrictPicker
+            selectedValue={addressValue}
+            onSelect={(district: District) => {
+            setAddressValue(district.value);
+            setAddressLabel(district.label);
+            }}
+            placeholder="동네를 선택하세요"
+        />
         </View>
 
         {/* 비상 연락처 */}

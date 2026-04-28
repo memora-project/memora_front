@@ -14,29 +14,35 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import type { LoginScreenProps } from '../navigation/AppNavigator';
 
-type Props = LoginScreenProps & {
-  onLoginSuccess: () => void;
-};
+import { useAuth } from '../contexts/AuthContext';
 
-const LoginScreen: React.FC<Props> = ({ navigation, onLoginSuccess }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    if (!email.trim()) {
-      Alert.alert('알림', '이메일을 입력해 주세요.');
-      return;
-    }
-    if (!email.includes('@')) {
-      Alert.alert('알림', '이메일 형식이 올바르지 않습니다.');
-      return;
-    }
-    if (!password) {
-      Alert.alert('알림', '비밀번호를 입력해 주세요.');
-      return;
-    }
-    onLoginSuccess();
-  };
+  const handleLogin = async () => {
+  if (!email.trim()) {
+    Alert.alert('알림', '이메일을 입력해 주세요.');
+    return;
+  }
+  if (!email.includes('@')) {
+    Alert.alert('알림', '이메일 형식이 올바르지 않습니다.');
+    return;
+  }
+  if (!password) {
+    Alert.alert('알림', '비밀번호를 입력해 주세요.');
+    return;
+  }
+
+  try {
+    // TODO: 실제 백엔드 인증 후 받은 토큰을 저장. 지금은 임시 토큰.
+    const fakeToken = 'temp-token-' + Date.now();
+    await login(email, fakeToken);
+  } catch (error) {
+    Alert.alert('오류', '로그인 처리 중 문제가 발생했습니다.');
+  }
+};
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>

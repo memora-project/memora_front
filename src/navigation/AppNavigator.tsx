@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -24,6 +24,9 @@ import SettingsScreen from '../screens/SettingsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 
+import { useAuth } from '../contexts/AuthContext';
+import { View, ActivityIndicator } from 'react-native';
+
 /**
  * ─────────────────────────────────────────────
  *  1) 인증(로그인/회원가입) Stack
@@ -39,11 +42,7 @@ export type SignUpScreenProps = NativeStackScreenProps<AuthStackParamList, 'Sign
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 
-type AuthStackNavigatorProps = {
-  onLoginSuccess: () => void;
-};
-
-const AuthStackNavigator: React.FC<AuthStackNavigatorProps> = ({ onLoginSuccess }) => {
+const AuthStackNavigator: React.FC = () => {
   return (
     <AuthStack.Navigator
       initialRouteName="Login"
@@ -52,9 +51,7 @@ const AuthStackNavigator: React.FC<AuthStackNavigatorProps> = ({ onLoginSuccess 
         contentStyle: { backgroundColor: '#FAF8F5' },
       }}
     >
-      <AuthStack.Screen name="Login">
-        {props => <LoginScreen {...props} onLoginSuccess={onLoginSuccess} />}
-      </AuthStack.Screen>
+      <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="SignUp" component={SignUpScreen} />
     </AuthStack.Navigator>
   );
@@ -187,18 +184,20 @@ const MainTabNavigator = () => {
  * ─────────────────────────────────────────────
  */
 const AppNavigator = () => {
-  // ⚠️ 임시 가짜 상태 (UI 작업용). 나중에 AsyncStorage/Context로 교체 예정.
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { isLoggedIn, isLoading } = useAuth();
 
-  const handleLoginSuccess = () => setIsLoggedIn(true);
+  // 앱 시작 직후 토큰 확인 중일 때 — 로딩 화면
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAF8F5' }}>
+        <ActivityIndicator size="large" color="#2C2A28" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer>
-      {isLoggedIn ? (
-        <MainTabNavigator />
-      ) : (
-        <AuthStackNavigator onLoginSuccess={handleLoginSuccess} />
-      )}
+      {isLoggedIn ? <MainTabNavigator /> : <AuthStackNavigator />}
     </NavigationContainer>
   );
 };
