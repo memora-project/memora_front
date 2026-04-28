@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -10,21 +10,60 @@ import {
   BottomTabScreenProps,
 } from '@react-navigation/bottom-tabs';
 
-// 기존 화면들
+// 일기 흐름 화면들
 import HomeScreen from '../screens/HomeScreen';
 import MidDiaryScreen from '../screens/MidDiaryScreen';
 import DetailScreen from '../screens/DetailScreen';
 
-// 신규 빈 깡통 화면들
-import DashboardScreen from '../screens/DashboardScreen';
+// 탭 화면들
 import DiaryListScreen from '../screens/DiaryListScreen';
 import ReportScreen from '../screens/ReportScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
+// 인증 화면들 (신규)
+import LoginScreen from '../screens/LoginScreen';
+import SignUpScreen from '../screens/SignUpScreen';
+
 /**
  * ─────────────────────────────────────────────
- *  1) 일기 목록 탭 안의 Stack 정의
- *     (Home → MidDiary 모달 → Detail 흐름)
+ *  1) 인증(로그인/회원가입) Stack
+ * ─────────────────────────────────────────────
+ */
+export type AuthStackParamList = {
+  Login: undefined;
+  SignUp: undefined;
+};
+
+export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
+export type SignUpScreenProps = NativeStackScreenProps<AuthStackParamList, 'SignUp'>;
+
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+
+type AuthStackNavigatorProps = {
+  onLoginSuccess: () => void;
+};
+
+const AuthStackNavigator: React.FC<AuthStackNavigatorProps> = ({ onLoginSuccess }) => {
+  return (
+    <AuthStack.Navigator
+      initialRouteName="Login"
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: '#FAF8F5' },
+      }}
+    >
+      <AuthStack.Screen name="Login">
+        {props => <LoginScreen {...props} onLoginSuccess={onLoginSuccess} />}
+      </AuthStack.Screen>
+      <AuthStack.Screen name="SignUp" component={SignUpScreen} />
+    </AuthStack.Navigator>
+  );
+};
+
+/**
+ * ─────────────────────────────────────────────
+ *  2) 일기 흐름 Stack (홈 탭 안에 들어감)
+ *     Home → MidDiary 모달 → Detail
  * ─────────────────────────────────────────────
  */
 export type DiaryStackParamList = {
@@ -61,7 +100,7 @@ const DiaryStackNavigator = () => {
 
 /**
  * ─────────────────────────────────────────────
- *  2) 하단 탭 정의 — 4개
+ *  3) 메인 하단 탭 (4개) — 로그인 후 진입
  * ─────────────────────────────────────────────
  */
 export type RootTabParamList = {
@@ -71,75 +110,95 @@ export type RootTabParamList = {
   Settings: undefined;
 };
 
-export type DashboardScreenProps = BottomTabScreenProps<RootTabParamList, 'Dashboard'>;
+export type DiaryListScreenProps = BottomTabScreenProps<RootTabParamList, 'DiaryList'>;
 export type ReportScreenProps = BottomTabScreenProps<RootTabParamList, 'Report'>;
 export type SettingsScreenProps = BottomTabScreenProps<RootTabParamList, 'Settings'>;
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
+const MainTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      initialRouteName="Home"
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: '#2C2A28',
+        tabBarInactiveTintColor: '#A09B95',
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#EFEAE3',
+          height: 64,
+          paddingTop: 6,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tab.Screen
+        name="Home"
+        component={DiaryStackNavigator}
+        options={{
+          tabBarLabel: '홈',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 22, color }}>🏠</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="DiaryList"
+        component={DiaryListScreen}
+        options={{
+          tabBarLabel: '일기 목록',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 22, color }}>📖</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Report"
+        component={ReportScreen}
+        options={{
+          tabBarLabel: '분석 리포트',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 22, color }}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarLabel: '설정',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 22, color }}>👤</Text>
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
+
+/**
+ * ─────────────────────────────────────────────
+ *  4) 진입점: 로그인 여부에 따라 분기
+ * ─────────────────────────────────────────────
+ */
 const AppNavigator = () => {
+  // ⚠️ 임시 가짜 상태 (UI 작업용). 나중에 AsyncStorage/Context로 교체 예정.
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const handleLoginSuccess = () => setIsLoggedIn(true);
+
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        initialRouteName="Home"
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: '#2C2A28',
-          tabBarInactiveTintColor: '#A09B95',
-          tabBarStyle: {
-            backgroundColor: '#FFFFFF',
-            borderTopColor: '#EFEAE3',
-            height: 64,
-            paddingTop: 6,
-            paddingBottom: 8,
-          },
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '500',
-          },
-        }}
-      >
-        <Tab.Screen
-          name="Home"
-          component={DiaryStackNavigator}
-          options={{
-            tabBarLabel: '홈',
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 22, color }}>🏠</Text>
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="DiaryList"
-          component={DiaryListScreen}
-          options={{
-            tabBarLabel: '일기 목록',
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 22, color }}>📖</Text>
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Report"
-          component={ReportScreen}
-          options={{
-            tabBarLabel: '분석 리포트',
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 22, color }}>📊</Text>
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            tabBarLabel: '설정',
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 22, color }}>👤</Text>
-            ),
-          }}
-        />
-      </Tab.Navigator>
+      {isLoggedIn ? (
+        <MainTabNavigator />
+      ) : (
+        <AuthStackNavigator onLoginSuccess={handleLoginSuccess} />
+      )}
     </NavigationContainer>
   );
 };
