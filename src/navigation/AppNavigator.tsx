@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
   createNativeStackNavigator,
@@ -9,6 +9,7 @@ import {
   createBottomTabNavigator,
   BottomTabScreenProps,
 } from '@react-navigation/bottom-tabs';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 // 일기 흐름 화면들
 import HomeScreen from '../screens/HomeScreen';
@@ -20,16 +21,18 @@ import DiaryListScreen from '../screens/DiaryListScreen';
 import ReportScreen from '../screens/ReportScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
-// 인증 화면들 (신규)
+// 인증 화면들
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 
+// 인증 컨텍스트
 import { useAuth } from '../contexts/AuthContext';
-import { View, ActivityIndicator } from 'react-native';
+
+import ProfileEditScreen from '../screens/ProfileEditScreen';
 
 /**
  * ─────────────────────────────────────────────
- *  1) 인증(로그인/회원가입) Stack
+ *  1) 인증 Stack
  * ─────────────────────────────────────────────
  */
 export type AuthStackParamList = {
@@ -59,8 +62,7 @@ const AuthStackNavigator: React.FC = () => {
 
 /**
  * ─────────────────────────────────────────────
- *  2) 일기 흐름 Stack (홈 탭 안에 들어감)
- *     Home → MidDiary 모달 → Detail
+ *  2) 일기 흐름 Stack
  * ─────────────────────────────────────────────
  */
 export type DiaryStackParamList = {
@@ -97,7 +99,36 @@ const DiaryStackNavigator = () => {
 
 /**
  * ─────────────────────────────────────────────
- *  3) 메인 하단 탭 (4개) — 로그인 후 진입
+ *  2-2) 설정 탭 안의 Stack (Settings → ProfileEdit)
+ * ─────────────────────────────────────────────
+ */
+export type SettingsStackParamList = {
+  SettingsMain: undefined;
+  ProfileEdit: undefined;
+};
+
+export type ProfileEditScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ProfileEdit'>;
+
+const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
+
+const SettingsStackNavigator = () => {
+  return (
+    <SettingsStack.Navigator
+      initialRouteName="SettingsMain"
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: '#FAF8F5' },
+      }}
+    >
+      <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
+      <SettingsStack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+    </SettingsStack.Navigator>
+  );
+};
+
+/**
+ * ─────────────────────────────────────────────
+ *  3) 메인 하단 탭 (4개)
  * ─────────────────────────────────────────────
  */
 export type RootTabParamList = {
@@ -119,18 +150,15 @@ const MainTabNavigator = () => {
       initialRouteName="Home"
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarActiveTintColor: '#2C2A28',
         tabBarInactiveTintColor: '#A09B95',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#EFEAE3',
-          height: 64,
-          paddingTop: 6,
-          paddingBottom: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          height: 90,
+          paddingTop: 18,
+          paddingBottom: 22,
         },
       }}
     >
@@ -138,9 +166,8 @@ const MainTabNavigator = () => {
         name="Home"
         component={DiaryStackNavigator}
         options={{
-          tabBarLabel: '홈',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>🏠</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="home-outline" size={28} color={color} />
           ),
         }}
       />
@@ -148,9 +175,8 @@ const MainTabNavigator = () => {
         name="DiaryList"
         component={DiaryListScreen}
         options={{
-          tabBarLabel: '일기 목록',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>📖</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="book-outline" size={28} color={color} />
           ),
         }}
       />
@@ -158,19 +184,17 @@ const MainTabNavigator = () => {
         name="Report"
         component={ReportScreen}
         options={{
-          tabBarLabel: '분석 리포트',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>📊</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="stats-chart-outline" size={28} color={color} />
           ),
         }}
       />
       <Tab.Screen
         name="Settings"
-        component={SettingsScreen}
+        component={SettingsStackNavigator}
         options={{
-          tabBarLabel: '설정',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>👤</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="person-outline" size={size} color={color} />
           ),
         }}
       />
@@ -180,16 +204,22 @@ const MainTabNavigator = () => {
 
 /**
  * ─────────────────────────────────────────────
- *  4) 진입점: 로그인 여부에 따라 분기
+ *  4) 진입점
  * ─────────────────────────────────────────────
  */
 const AppNavigator = () => {
   const { isLoggedIn, isLoading } = useAuth();
 
-  // 앱 시작 직후 토큰 확인 중일 때 — 로딩 화면
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAF8F5' }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#FAF8F5',
+        }}
+      >
         <ActivityIndicator size="large" color="#2C2A28" />
       </View>
     );
