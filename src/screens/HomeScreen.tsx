@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AppHeader from '../components/AppHeader';
+import { useSettings } from '../contexts/SettingsContext';
 
 import type { HomeScreenProps } from '../navigation/AppNavigator';
 import { getAllDiaries, type DiaryEntry } from '../storage/diaryStorage';
@@ -23,6 +24,7 @@ const formatDate = (iso: string): string => {
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { scale } = useSettings();
 
   // 화면이 포커스될 때마다 (저장 후 돌아왔을 때 포함) 최신 목록을 다시 가져온다.
   useFocusEffect(
@@ -58,10 +60,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       onPress={() => handleOpenDetail(item)}
     >
       <View style={styles.itemHeader}>
-        <Text style={styles.itemDate}>{formatDate(item.createdAt)}</Text>
+        <Text style={[styles.itemDate, { fontSize: scale(13) }]}>
+          {formatDate(item.createdAt)}
+        </Text>
         {item.mood && <Text style={styles.itemMood}>{item.mood.emoji}</Text>}
       </View>
-      <Text style={styles.itemSummary} numberOfLines={2}>
+      <Text
+        style={[styles.itemSummary, { fontSize: scale(15) }]}
+        numberOfLines={2}
+      >
         {item.content}
       </Text>
     </TouchableOpacity>
@@ -70,8 +77,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
       <Text style={styles.emptyEmoji}>📔</Text>
-      <Text style={styles.emptyTitle}>첫 일기를 작성해 보세요!</Text>
-      <Text style={styles.emptySubtitle}>
+      <Text style={[styles.emptyTitle, { fontSize: scale(18) }]}>
+        첫 일기를 작성해 보세요!
+      </Text>
+      <Text style={[styles.emptySubtitle, { fontSize: scale(14) }]}>
         오른쪽 아래 + 버튼을 눌러 오늘의 마음을 담아보세요
       </Text>
     </View>
@@ -164,7 +173,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   itemDate: {
-    fontSize: 13,
     color: '#A09B95',
     fontWeight: '500',
   },
@@ -172,7 +180,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   itemSummary: {
-    fontSize: 15,
     color: '#3D3A37',
     lineHeight: 22,
   },
@@ -186,13 +193,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
     fontWeight: '600',
     color: '#3D3A37',
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 14,
     color: '#8A857F',
     textAlign: 'center',
     lineHeight: 20,

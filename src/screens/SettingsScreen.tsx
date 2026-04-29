@@ -5,12 +5,14 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import type { SettingsStackParamList } from '../navigation/AppNavigator';
 
 type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'SettingsMain'>;
 
 const SettingsScreen: React.FC = () => {
-  const { userEmail, userName, logout } = useAuth();
+  const { userEmail, userName, userCreatedAt, logout } = useAuth();
+  const { scale } = useSettings();
   const navigation = useNavigation<NavigationProp>();
 
   const handleLogout = () => {
@@ -34,42 +36,60 @@ const SettingsScreen: React.FC = () => {
     );
   };
 
-  // 이름 없으면 "사용자" fallback
   const displayName = userName || '사용자';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>설정</Text>
+        <Text style={[styles.headerTitle, { fontSize: scale(28) }]}>설정</Text>
       </View>
 
-      {/* ── 프로필 카드 ── */}
+      {/* 프로필 카드 */}
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
           <Icon name="person" size={36} color="#FFFFFF" />
         </View>
-        <Text style={styles.profileName}>{displayName}</Text>
-        <Text style={styles.profileEmail}>{userEmail || '-'}</Text>
+        <Text style={[styles.profileName, { fontSize: scale(22) }]}>{displayName}</Text>
+        <Text style={[styles.profileEmail, { fontSize: scale(14) }]}>{userEmail || '-'}</Text>
       </View>
 
-      {/* ── 계정 섹션 ── */}
+      {/* 계정 섹션 */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>계정</Text>
+        <Text style={[styles.sectionLabel, { fontSize: scale(13) }]}>계정</Text>
         <TouchableOpacity
           style={styles.actionRow}
           onPress={() => navigation.navigate('ProfileEdit')}
           activeOpacity={0.7}
         >
-          <Text style={styles.actionLabel}>프로필 수정</Text>
+          <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>프로필 수정</Text>
           <Text style={styles.actionArrow}>›</Text>
         </TouchableOpacity>
       </View>
 
-      {/* ── 기타 섹션 ── */}
+      {/* 환경설정 섹션 */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>기타</Text>
+        <Text style={[styles.sectionLabel, { fontSize: scale(13) }]}>환경설정</Text>
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => navigation.navigate('FontSize')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>글씨 크기</Text>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 기타 섹션 */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { fontSize: scale(13) }]}>기타</Text>
+
+        <View style={styles.row}>
+          <Text style={[styles.rowLabel, { fontSize: scale(15) }]}>가입일시</Text>
+          <Text style={[styles.rowValue, { fontSize: scale(15) }]}>{userCreatedAt || '-'}</Text>
+        </View>
+
         <TouchableOpacity style={styles.actionRow} onPress={handleLogout} activeOpacity={0.7}>
-          <Text style={styles.logoutText}>로그아웃</Text>
+          <Text style={[styles.logoutText, { fontSize: scale(15) }]}>로그아웃</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -87,7 +107,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerTitle: {
-    fontSize: 28,
     fontWeight: '700',
     color: '#2C2A28',
   },
@@ -116,14 +135,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   profileName: {
-    fontSize: 22,
     fontWeight: '700',
     color: '#2C2A28',
     marginBottom: 4,
     letterSpacing: -0.3,
   },
   profileEmail: {
-    fontSize: 14,
     color: '#8A857F',
   },
   section: {
@@ -131,11 +148,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   sectionLabel: {
-    fontSize: 13,
     fontWeight: '600',
     color: '#A09B95',
     marginBottom: 8,
     textTransform: 'uppercase',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    marginBottom: 8,
+  },
+  rowLabel: {
+    color: '#3D3A37',
+  },
+  rowValue: {
+    color: '#8A857F',
+    fontWeight: '500',
   },
   actionRow: {
     flexDirection: 'row',
@@ -148,7 +181,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   actionLabel: {
-    fontSize: 15,
     color: '#3D3A37',
     fontWeight: '500',
   },
@@ -158,7 +190,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   logoutText: {
-    fontSize: 15,
     color: '#D9534F',
     fontWeight: '600',
   },

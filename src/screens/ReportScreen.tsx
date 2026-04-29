@@ -1,15 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSettings } from '../contexts/SettingsContext';
 
 const ReportScreen: React.FC = () => {
+  const { scale } = useSettings();
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>사용자 분석</Text>
+        <Text style={[styles.headerTitle, { fontSize: scale(28) }]}>사용자 분석</Text>
       </View>
       <View style={styles.content}>
-        <Text style={styles.placeholder}>주간/월간 기분 그래프가 들어올 자리</Text>
+        <Text style={[styles.placeholder, { fontSize: scale(16) }]}>
+          주간/월간 기분 그래프가 들어올 자리
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -26,7 +31,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerTitle: {
-    fontSize: 28,
     fontWeight: '700',
     color: '#2C2A28',
     letterSpacing: -0.5,
@@ -38,7 +42,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   placeholder: {
-    fontSize: 16,
     color: '#3D3A37',
     fontWeight: '600',
     textAlign: 'center',
