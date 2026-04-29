@@ -30,6 +30,8 @@ import { useAuth } from '../contexts/AuthContext';
 
 import ProfileEditScreen from '../screens/ProfileEditScreen';
 
+import FontSizeScreen from '../screens/FontSizeScreen';
+
 /**
  * ─────────────────────────────────────────────
  *  1) 인증 Stack
@@ -105,9 +107,11 @@ const DiaryStackNavigator = () => {
 export type SettingsStackParamList = {
   SettingsMain: undefined;
   ProfileEdit: undefined;
+  FontSize: undefined;
 };
 
 export type ProfileEditScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ProfileEdit'>;
+export type FontSizeScreenProps = NativeStackScreenProps<SettingsStackParamList, 'FontSize'>;
 
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
@@ -122,6 +126,7 @@ const SettingsStackNavigator = () => {
     >
       <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+      <SettingsStack.Screen name="FontSize" component={FontSizeScreen} />
     </SettingsStack.Navigator>
   );
 };

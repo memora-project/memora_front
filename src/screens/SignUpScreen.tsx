@@ -15,18 +15,22 @@ import DistrictPicker from '../components/DistrictPicker';
 import BirthdatePicker from '../components/BirthdatePicker';
 import type { District } from '../constants/districts';
 import type { SignUpScreenProps } from '../navigation/AppNavigator';
+import type { Gender } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 
 const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
+  const { scale } = useSettings();
+
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [phone, setPhone] = useState('');
-  const [birthdate, setBirthdate] = useState('');
-  const [addressValue, setAddressValue] = useState('');
-  const [addressLabel, setAddressLabel] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [gender, setGender] = useState<Gender | ''>('');
+  const [birthDate, setBirthDate] = useState('');
+  const [address, setAddress] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
-  const [reportShareAgreed, setReportShareAgreed] = useState(false);
+  const [isReportShared, setIsReportShared] = useState(false);
 
   const handleSignUp = () => {
     if (!email.trim()) {
@@ -49,23 +53,39 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       Alert.alert('알림', '비밀번호가 일치하지 않습니다.');
       return;
     }
-    if (!phone.trim()) {
+    if (!phoneNumber.trim()) {
       Alert.alert('알림', '전화번호를 입력해 주세요.');
       return;
     }
-    if (!birthdate || birthdate.split('-').length !== 3) {
+    if (!gender) {
+      Alert.alert('알림', '성별을 선택해 주세요.');
+      return;
+    }
+    if (!birthDate || birthDate.split('-').length !== 3) {
       Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
       return;
     }
-    const [y, m, d] = birthdate.split('-');
+    const [y, m, d] = birthDate.split('-');
     if (!y || !m || !d) {
       Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
       return;
     }
-    if (!addressValue) {
+    if (!address) {
       Alert.alert('알림', '주소(동네)를 선택해 주세요.');
       return;
     }
+
+    // TODO: 백엔드 연동 후 — POST /auth/signup 호출
+    // const response = await fetch('/api/v1/auth/signup', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     login_id: email, password, name, gender,
+    //     birth_date: birthDate, address,
+    //     phone_number: phoneNumber,
+    //     is_report_shared: isReportShared,
+    //   }),
+    // });
 
     Alert.alert(
       '회원가입 완료',
@@ -79,6 +99,26 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
     );
   };
 
+  const renderGenderOption = (value: Gender, label: string) => {
+    const isActive = gender === value;
+    return (
+      <TouchableOpacity
+        key={value}
+        style={[styles.genderBtn, isActive && styles.genderBtnActive]}
+        onPress={() => setGender(value)}
+        activeOpacity={0.7}
+      >
+        <Text style={[
+          styles.genderText,
+          isActive && styles.genderTextActive,
+          { fontSize: scale(16) },
+        ]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -88,7 +128,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         >
           <Text style={styles.backBtn}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>회원가입</Text>
+        <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>회원가입</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -101,11 +141,11 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       >
         {/* 이메일 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             이메일 <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontSize: scale(17) }]}
             value={email}
             onChangeText={setEmail}
             placeholder="example@email.com"
@@ -120,11 +160,11 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
         {/* 이름 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             이름 <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontSize: scale(17) }]}
             value={name}
             onChangeText={setName}
             placeholder="홍길동"
@@ -136,11 +176,11 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
         {/* 비밀번호 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             비밀번호 <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontSize: scale(17) }]}
             value={password}
             onChangeText={setPassword}
             placeholder="6자 이상"
@@ -152,11 +192,11 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
         {/* 비밀번호 확인 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             비밀번호 확인 <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontSize: scale(17) }]}
             value={passwordConfirm}
             onChangeText={setPasswordConfirm}
             placeholder="비밀번호 한 번 더 입력"
@@ -168,13 +208,13 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
         {/* 전화번호 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             전화번호 <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
+            style={[styles.input, { fontSize: scale(17) }]}
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
             placeholder="010-0000-0000"
             placeholderTextColor="#B5AFA8"
             keyboardType="phone-pad"
@@ -183,24 +223,34 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           />
         </View>
 
-        {/* 생년월일 (신규!) */}
+        {/* 성별 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
+            성별 <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={styles.genderRow}>
+            {renderGenderOption('MALE', '남성')}
+            {renderGenderOption('FEMALE', '여성')}
+          </View>
+        </View>
+
+        {/* 생년월일 */}
+        <View style={styles.inputWrap}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             생년월일 <Text style={styles.required}>*</Text>
           </Text>
-          <BirthdatePicker value={birthdate} onChange={setBirthdate} />
+          <BirthdatePicker value={birthDate} onChange={setBirthDate} />
         </View>
 
         {/* 주소 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             주소 (대전 내 동네) <Text style={styles.required}>*</Text>
           </Text>
           <DistrictPicker
-            selectedValue={addressValue}
+            selectedValue={address}
             onSelect={(district: District) => {
-              setAddressValue(district.value);
-              setAddressLabel(district.label);
+              setAddress(district.label);
             }}
             placeholder="동네를 선택하세요"
           />
@@ -208,9 +258,9 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
         {/* 비상 연락처 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>비상 연락처 (선택)</Text>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>비상 연락처 (선택)</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontSize: scale(17) }]}
             value={emergencyContact}
             onChangeText={setEmergencyContact}
             placeholder="010-0000-0000"
@@ -219,7 +269,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
             multiline
             numberOfLines={1}
           />
-          <Text style={styles.helperText}>
+          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
             장시간 활동이 감지되지 않을 경우 연락이 갑니다.
           </Text>
         </View>
@@ -228,14 +278,16 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         {emergencyContact.trim().length > 0 && (
           <View style={styles.switchRow}>
             <View style={styles.switchLabelWrap}>
-              <Text style={styles.switchLabel}>월간 분석 리포트 공유</Text>
-              <Text style={styles.switchHelper}>
+              <Text style={[styles.switchLabel, { fontSize: scale(15) }]}>
+                월간 분석 리포트 공유
+              </Text>
+              <Text style={[styles.switchHelper, { fontSize: scale(13) }]}>
                 비상 연락처에 매월 기분 변화 리포트를 공유합니다.
               </Text>
             </View>
             <Switch
-              value={reportShareAgreed}
-              onValueChange={setReportShareAgreed}
+              value={isReportShared}
+              onValueChange={setIsReportShared}
               trackColor={{ false: '#EFEAE3', true: '#2C2A28' }}
               thumbColor="#FFFFFF"
             />
@@ -247,7 +299,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           onPress={handleSignUp}
           activeOpacity={0.85}
         >
-          <Text style={styles.signUpBtnText}>가입하기</Text>
+          <Text style={[styles.signUpBtnText, { fontSize: scale(17) }]}>가입하기</Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
     </SafeAreaView>
@@ -274,7 +326,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   headerTitle: {
-    fontSize: 18,
     fontWeight: '700',
     color: '#2C2A28',
   },
@@ -290,7 +341,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   inputLabel: {
-    fontSize: 15,
     fontWeight: '600',
     color: '#3D3A37',
     marginBottom: 8,
@@ -305,16 +355,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
-    fontSize: 17,
     color: '#2C2A28',
     minHeight: 52,
     textAlignVertical: 'center',
   },
   helperText: {
     marginTop: 6,
-    fontSize: 13,
     color: '#A09B95',
     lineHeight: 18,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EFEAE3',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  genderBtnActive: {
+    backgroundColor: '#2C2A28',
+    borderColor: '#2C2A28',
+  },
+  genderText: {
+    color: '#3D3A37',
+    fontWeight: '500',
+  },
+  genderTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   switchRow: {
     flexDirection: 'row',
@@ -330,13 +403,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   switchLabel: {
-    fontSize: 15,
     fontWeight: '600',
     color: '#3D3A37',
     marginBottom: 4,
   },
   switchHelper: {
-    fontSize: 13,
     color: '#A09B95',
     lineHeight: 18,
   },
@@ -349,7 +420,6 @@ const styles = StyleSheet.create({
   },
   signUpBtnText: {
     color: '#FFFFFF',
-    fontSize: 17,
     fontWeight: '600',
   },
 });

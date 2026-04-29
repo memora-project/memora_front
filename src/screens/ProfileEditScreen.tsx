@@ -11,18 +11,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import BirthdatePicker from '../components/BirthdatePicker';
 import DistrictPicker from '../components/DistrictPicker';
 import type { District } from '../constants/districts';
 import type { ProfileEditScreenProps } from '../navigation/AppNavigator';
 
 const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => {
-  const { userName, userBirthdate, userAddressValue, userAddressLabel, updateProfile } = useAuth();
+  const { userName, userBirthDate, userAddress, updateProfile } = useAuth();
+  const { scale } = useSettings();
 
   const [name, setName] = useState(userName ?? '');
-  const [birthdate, setBirthdate] = useState(userBirthdate ?? '');
-  const [addressValue, setAddressValue] = useState(userAddressValue ?? '');
-  const [addressLabel, setAddressLabel] = useState(userAddressLabel ?? '');
+  const [birthDate, setBirthDate] = useState(userBirthDate ?? '');
+  const [address, setAddress] = useState(userAddress ?? '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -30,23 +31,23 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
       Alert.alert('알림', '이름을 입력해 주세요.');
       return;
     }
-    if (!birthdate || birthdate.split('-').length !== 3) {
+    if (!birthDate || birthDate.split('-').length !== 3) {
       Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
       return;
     }
-    const [y, m, d] = birthdate.split('-');
+    const [y, m, d] = birthDate.split('-');
     if (!y || !m || !d) {
       Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
       return;
     }
-    if (!addressValue) {
+    if (!address) {
       Alert.alert('알림', '주소를 선택해 주세요.');
       return;
     }
 
     try {
       setSaving(true);
-      await updateProfile(name.trim(), birthdate, addressValue, addressLabel);
+      await updateProfile(name.trim(), birthDate, address);
       Alert.alert('저장 완료', '프로필이 수정되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
@@ -66,7 +67,7 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
         >
           <Text style={styles.backBtn}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>프로필 수정</Text>
+        <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>프로필 수정</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -79,11 +80,11 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
       >
         {/* 이름 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             이름 <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontSize: scale(17) }]}
             value={name}
             onChangeText={setName}
             placeholder="홍길동"
@@ -95,22 +96,21 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
 
         {/* 생년월일 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             생년월일 <Text style={styles.required}>*</Text>
           </Text>
-          <BirthdatePicker value={birthdate} onChange={setBirthdate} />
+          <BirthdatePicker value={birthDate} onChange={setBirthDate} />
         </View>
 
         {/* 주소 */}
         <View style={styles.inputWrap}>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             주소 (대전 내 동네) <Text style={styles.required}>*</Text>
           </Text>
           <DistrictPicker
-            selectedValue={addressValue}
+            selectedValue={address}
             onSelect={(district: District) => {
-              setAddressValue(district.value);
-              setAddressLabel(district.label);
+              setAddress(district.label);
             }}
             placeholder="동네를 선택하세요"
           />
@@ -122,7 +122,9 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
           activeOpacity={0.85}
           disabled={saving}
         >
-          <Text style={styles.saveBtnText}>{saving ? '저장 중...' : '저장하기'}</Text>
+          <Text style={[styles.saveBtnText, { fontSize: scale(17) }]}>
+            {saving ? '저장 중...' : '저장하기'}
+          </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
     </SafeAreaView>
@@ -149,7 +151,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   headerTitle: {
-    fontSize: 18,
     fontWeight: '700',
     color: '#2C2A28',
   },
@@ -165,7 +166,6 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   inputLabel: {
-    fontSize: 15,
     fontWeight: '600',
     color: '#3D3A37',
     marginBottom: 10,
@@ -180,7 +180,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
-    fontSize: 17,
     color: '#2C2A28',
     minHeight: 52,
     textAlignVertical: 'center',
@@ -197,7 +196,6 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: '#FFFFFF',
-    fontSize: 17,
     fontWeight: '600',
   },
 });

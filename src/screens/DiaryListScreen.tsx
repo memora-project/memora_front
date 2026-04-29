@@ -1,16 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSettings } from '../contexts/SettingsContext';
 
 const DiaryListScreen: React.FC = () => {
+  const { scale } = useSettings();
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>일기 목록</Text>
+        <Text style={[styles.headerTitle, { fontSize: scale(28) }]}>일기 목록</Text>
       </View>
       <View style={styles.content}>
-        <Text style={styles.placeholder}>캘린더 / 리스트 모드가 들어올 자리</Text>
-        <Text style={styles.placeholderSub}>(월간 캘린더 + 일간 리스트 전환)</Text>
+        <Text style={[styles.placeholder, { fontSize: scale(16) }]}>
+          캘린더 / 리스트 모드가 들어올 자리
+        </Text>
+        <Text style={[styles.placeholderSub, { fontSize: scale(13) }]}>
+          (월간 캘린더 + 일간 리스트 전환)
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -27,7 +34,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerTitle: {
-    fontSize: 28,
     fontWeight: '700',
     color: '#2C2A28',
     letterSpacing: -0.5,
@@ -39,13 +45,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   placeholder: {
-    fontSize: 16,
     color: '#3D3A37',
     fontWeight: '600',
     marginBottom: 8,
   },
   placeholderSub: {
-    fontSize: 13,
     color: '#8A857F',
     textAlign: 'center',
   },
