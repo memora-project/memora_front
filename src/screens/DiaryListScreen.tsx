@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AppHeader from '../components/AppHeader';
 
 const DiaryListScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <AppHeader />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>일기 목록</Text>
+      </View>
       <View style={styles.content}>
         <Text style={styles.placeholder}>캘린더 / 리스트 모드가 들어올 자리</Text>
         <Text style={styles.placeholderSub}>(월간 캘린더 + 일간 리스트 전환)</Text>
@@ -19,6 +20,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAF8F5',
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#2C2A28',
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,

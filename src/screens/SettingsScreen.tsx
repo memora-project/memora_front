@@ -1,10 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../contexts/AuthContext';
+import type { SettingsStackParamList } from '../navigation/AppNavigator';
+
+type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'SettingsMain'>;
 
 const SettingsScreen: React.FC = () => {
-  const { userEmail, logout } = useAuth();
+  const { userEmail, userName, logout } = useAuth();
+  const navigation = useNavigation<NavigationProp>();
 
   const handleLogout = () => {
     Alert.alert(
@@ -27,23 +34,41 @@ const SettingsScreen: React.FC = () => {
     );
   };
 
+  // 이름 없으면 "사용자" fallback
+  const displayName = userName || '사용자';
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>설정</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>계정</Text>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>이메일</Text>
-          <Text style={styles.rowValue}>{userEmail || '-'}</Text>
+      {/* ── 프로필 카드 ── */}
+      <View style={styles.profileCard}>
+        <View style={styles.avatar}>
+          <Icon name="person" size={36} color="#FFFFFF" />
         </View>
+        <Text style={styles.profileName}>{displayName}</Text>
+        <Text style={styles.profileEmail}>{userEmail || '-'}</Text>
       </View>
 
+      {/* ── 계정 섹션 ── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>계정</Text>
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => navigation.navigate('ProfileEdit')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.actionLabel}>프로필 수정</Text>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── 기타 섹션 ── */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>기타</Text>
-        <TouchableOpacity style={styles.row} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.actionRow} onPress={handleLogout} activeOpacity={0.7}>
           <Text style={styles.logoutText}>로그아웃</Text>
         </TouchableOpacity>
       </View>
@@ -66,8 +91,43 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#2C2A28',
   },
+  profileCard: {
+    marginHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#2C2A28',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2C2A28',
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  profileEmail: {
+    fontSize: 14,
+    color: '#8A857F',
+  },
   section: {
-    marginTop: 24,
+    marginTop: 16,
     paddingHorizontal: 24,
   },
   sectionLabel: {
@@ -77,7 +137,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
   },
-  row: {
+  actionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -87,14 +147,15 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     marginBottom: 8,
   },
-  rowLabel: {
+  actionLabel: {
     fontSize: 15,
     color: '#3D3A37',
-  },
-  rowValue: {
-    fontSize: 15,
-    color: '#8A857F',
     fontWeight: '500',
+  },
+  actionArrow: {
+    fontSize: 20,
+    color: '#A09B95',
+    fontWeight: '300',
   },
   logoutText: {
     fontSize: 15,

@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import type { SignUpScreenProps } from '../navigation/AppNavigator';
 import DistrictPicker from '../components/DistrictPicker';
+import BirthdatePicker from '../components/BirthdatePicker';
 import type { District } from '../constants/districts';
+import type { SignUpScreenProps } from '../navigation/AppNavigator';
 
 const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -21,8 +22,9 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phone, setPhone] = useState('');
-  const [addressValue, setAddressValue] = useState('');   // 'yuseong-bongmyeong'
-  const [addressLabel, setAddressLabel] = useState('');   // '유성구 봉명동'
+  const [birthdate, setBirthdate] = useState('');
+  const [addressValue, setAddressValue] = useState('');
+  const [addressLabel, setAddressLabel] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
   const [reportShareAgreed, setReportShareAgreed] = useState(false);
 
@@ -51,9 +53,18 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       Alert.alert('알림', '전화번호를 입력해 주세요.');
       return;
     }
+    if (!birthdate || birthdate.split('-').length !== 3) {
+      Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
+      return;
+    }
+    const [y, m, d] = birthdate.split('-');
+    if (!y || !m || !d) {
+      Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
+      return;
+    }
     if (!addressValue) {
-        Alert.alert('알림', '주소(동네)를 선택해 주세요.');
-        return;
+      Alert.alert('알림', '주소(동네)를 선택해 주세요.');
+      return;
     }
 
     Alert.alert(
@@ -87,7 +98,6 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         extraScrollHeight={20}
-        enableResetScrollToCoords={false}
       >
         {/* 이메일 */}
         <View style={styles.inputWrap}>
@@ -173,19 +183,27 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           />
         </View>
 
+        {/* 생년월일 (신규!) */}
+        <View style={styles.inputWrap}>
+          <Text style={styles.inputLabel}>
+            생년월일 <Text style={styles.required}>*</Text>
+          </Text>
+          <BirthdatePicker value={birthdate} onChange={setBirthdate} />
+        </View>
+
         {/* 주소 */}
         <View style={styles.inputWrap}>
-        <Text style={styles.inputLabel}>
+          <Text style={styles.inputLabel}>
             주소 (대전 내 동네) <Text style={styles.required}>*</Text>
-        </Text>
-        <DistrictPicker
+          </Text>
+          <DistrictPicker
             selectedValue={addressValue}
             onSelect={(district: District) => {
-            setAddressValue(district.value);
-            setAddressLabel(district.label);
+              setAddressValue(district.value);
+              setAddressLabel(district.label);
             }}
             placeholder="동네를 선택하세요"
-        />
+          />
         </View>
 
         {/* 비상 연락처 */}
