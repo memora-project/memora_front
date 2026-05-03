@@ -1,7 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -96,6 +96,8 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // 개발 중 백엔드(http://10.0.2.2:8080) 호출 허용. release에서는 false.
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -103,6 +105,8 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            // 운영에서는 HTTPS만 허용.
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
         }
     }
 }
