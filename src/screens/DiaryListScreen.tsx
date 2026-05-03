@@ -6,31 +6,26 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  useFocusEffect,
-  useNavigation,
-  type CompositeNavigationProp,
-} from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useSettings } from '../contexts/SettingsContext';
-import { getDiariesByMonth, type DiaryResponse } from '../api/diaries';
+import {
+  getDiariesByMonth,
+  deleteDiary,
+  type DiaryResponse,
+} from '../api/diaries';
 import { MOOD_INFO } from '../constants/moods';
 import YearMonthPicker from '../components/YearMonthPicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type {
-  RootTabParamList,
-  DiaryStackParamList,
-} from '../navigation/AppNavigator';
+import type { RootTabParamList } from '../navigation/AppNavigator';
 
-// DiaryListScreen은 하단 Tab navigator에 속하지만, Detail 화면은 Home 탭 안의
-// DiaryStack에 있다. 두 navigator를 가로질러 navigate 하려면 CompositeNavigationProp 필요.
-type DiaryListNavigationProp = CompositeNavigationProp<
-  BottomTabNavigationProp<RootTabParamList, 'DiaryList'>,
-  NativeStackNavigationProp<DiaryStackParamList>
->;
+// DiaryListScreen은 하단 Tab navigator에 속함. Detail은 Home 탭의 DiaryStack 안에 있어서
+// Tab의 navigate('Home', { screen: 'Detail', params }) 형태로 중첩 navigate.
+// RootTabParamList.Home이 NavigatorScreenParams<DiaryStackParamList>로 타입돼있어야 동작.
+type DiaryListNavigationProp = BottomTabNavigationProp<RootTabParamList, 'DiaryList'>;
 
 LocaleConfig.locales['ko'] = {
   monthNames: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
@@ -157,6 +152,30 @@ const DiaryListScreen: React.FC = () => {
     setCurrentMonth(newDate);
   };
 
+  // 일기 카드 길게 눌러서 삭제
+  const handleDeleteRequest = (diary: DiaryResponse) => {
+    Alert.alert(
+      '일기를 삭제할까요?',
+      `${diary.targetDate}의 일기와 그날의 모든 중간 기록이 함께 삭제돼요.\n한 번 삭제하면 되돌릴 수 없어요.`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDiary(diary.diaryId);
+              await fetchMonth(currentMonth);
+            } catch (e: any) {
+              Alert.alert('삭제 실패', e?.message ?? '알 수 없는 오류');
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -168,7 +187,11 @@ const DiaryListScreen: React.FC = () => {
           <ActivityIndicator color="#2C2A28" />
         </View>
       ) : (
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentScroll}
+          showsVerticalScrollIndicator={false}
+        >
           {/* 캘린더 */}
           <View style={styles.calendarCard}>
             <View style={styles.calendarHeader}>
@@ -244,12 +267,9 @@ const DiaryListScreen: React.FC = () => {
           <View style={styles.selectedSection}>
             <Text style={[styles.selectedDateLabel, { fontSize: scale(14) }]}>
               {formatKoreanDate(selectedDate)}
-            </Text>
+                </Text>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.selectedScroll}
-            >
+            <View style={styles.selectedScroll}>
               {selectedDiaries.length > 0 ? (
                 selectedDiaries.map(diary => {
                   const moodInfo = diary.finalMood
@@ -276,6 +296,22 @@ const DiaryListScreen: React.FC = () => {
                         {moodInfo && (
                           <Text style={styles.entryMood}>{moodInfo.emoji}</Text>
                         )}
+                        {/* 삭제 버튼 — 카드 본체 누르는 것과 분리되도록 별도 TouchableOpacity */}
+                        <TouchableOpacity
+                          style={styles.entryDeleteBtn}
+                          onPress={() => handleDeleteRequest(diary)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.6}
+                        >
+                          <Text
+                            style={[
+                              styles.entryDeleteText,
+                              { fontSize: scale(13) },
+                            ]}
+                          >
+                            삭제
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                       <Text
                         style={[styles.entryContent, { fontSize: scale(14) }]}
@@ -293,9 +329,9 @@ const DiaryListScreen: React.FC = () => {
                   </Text>
                 </View>
               )}
-            </ScrollView>
+            </View>
           </View>
-        </View>
+        </ScrollView>
       )}
 
       {/* 년/월 선택 모달 */}
@@ -331,7 +367,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentScroll: {
     paddingHorizontal: 16,
+    paddingBottom: 32,
   },
   calendarCard: {
     backgroundColor: '#FFFFFF',
@@ -370,11 +409,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   selectedSection: {
-    flex: 1,
     paddingHorizontal: 8,
   },
   selectedScroll: {
-    paddingBottom: 24,
+    // 이전엔 ScrollView contentContainer였으나 외부 ScrollView로 통합됨.
+    // padding은 부모(contentScroll)가 처리.
   },
   selectedDateLabel: {
     fontWeight: '600',
@@ -389,10 +428,21 @@ const styles = StyleSheet.create({
   },
   entryHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 6,
   },
   entryMood: {
     fontSize: 22,
+  },
+  entryDeleteBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: 'auto', // 오른쪽 끝으로
+  },
+  entryDeleteText: {
+    color: '#C0392B',
+    fontWeight: '500',
   },
   entryContent: {
     color: '#3D3A37',
