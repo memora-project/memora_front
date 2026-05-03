@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  type NavigatorScreenParams,
+} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   NativeStackScreenProps,
@@ -137,10 +140,12 @@ const SettingsStackNavigator = () => {
  * ─────────────────────────────────────────────
  */
 export type RootTabParamList = {
-  Home: undefined;
+  // Home/Settings은 자체 Stack을 갖고 있어서, 다른 탭에서 중첩 navigate 가능하도록
+  // NavigatorScreenParams로 타입 지정 (예: DiaryListScreen → Home/Detail).
+  Home: NavigatorScreenParams<DiaryStackParamList>;
   DiaryList: undefined;
   Report: undefined;
-  Settings: undefined;
+  Settings: NavigatorScreenParams<SettingsStackParamList>;
 };
 
 export type DiaryListScreenProps = BottomTabScreenProps<RootTabParamList, 'DiaryList'>;
