@@ -23,8 +23,10 @@ import Geolocation from '@react-native-community/geolocation';
 
 import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
 import { pickImageWithExif } from '../native/PhotoExif';
-import { generateAIDraft } from '../api/openrouter';
-import { saveDiary } from '../storage/diaryStorage';
+import { createTodayDiary, type MoodType } from '../api/diaries';
+import { createSegment, updateSegment } from '../api/segments';
+import { generateSegmentAiDraft } from '../api/aiDiary';
+import { uploadImage } from '../api/files';
 
 /**
  * 필요한 권한 (네이티브 빌드 시 설정)
@@ -49,6 +51,8 @@ interface Mood {
   key: string;
   label: string;
   emoji: string;
+  /** 백엔드 MoodType enum 값. AI 호출/저장 시 이걸로 보냄. */
+  apiValue: MoodType;
 }
 
 interface PhotoMetadata {
@@ -73,12 +77,12 @@ interface PhotoMetadata {
 const NO_LOCATION_LABEL = '위치 정보 없음';
 
 const MOODS: Mood[] = [
-  { key: 'best', label: '최고에요', emoji: '😄' },
-  { key: 'calm', label: '평온해요', emoji: '😌' },
-  { key: 'unsure', label: '저도 모르겠어요', emoji: '🤔' },
-  { key: 'sad', label: '슬퍼요', emoji: '😢' },
-  { key: 'angry', label: '화나요', emoji: '😠' },
-  { key: 'sick', label: '몸이 안 좋아요', emoji: '🤒' },
+  { key: 'best', label: '최고에요', emoji: '😄', apiValue: 'GREAT' },
+  { key: 'calm', label: '평온해요', emoji: '😌', apiValue: 'CALM' },
+  { key: 'unsure', label: '저도 모르겠어요', emoji: '🤔', apiValue: 'UNKNOWN' },
+  { key: 'sad', label: '슬퍼요', emoji: '😢', apiValue: 'SAD' },
+  { key: 'angry', label: '화나요', emoji: '😠', apiValue: 'ANGRY' },
+  { key: 'sick', label: '몸이 안 좋아요', emoji: '🤒', apiValue: 'PAIN' },
 ];
 
 // EXIF의 GPS는 보통 "37,33,12.34" 형태(도/분/초) 또는 십진수로 옵니다.
@@ -226,21 +230,46 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Step 3 진입 시 AI 초안 생성 (OpenRouter 호출)
+  // 백엔드 연동 상태
+  // - diaryId: 화면 진입 시 createTodayDiary로 받음 (오늘 날짜 diary 1개, 이미 있으면 기존 거)
+  // - segmentId: Step 2 → 3 전환 시 createSegment로 받음 (이번 작성의 중간 기록)
+  // - isAdvancing: Step 2의 "다음" 버튼 누른 후 사진 업로드 + segment 생성 + AI 생성 끝날 때까지
+  const [diaryId, setDiaryId] = useState<number | null>(null);
+  const [segmentId, setSegmentId] = useState<number | null>(null);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+
+  // 화면 진입 시: 오늘 일기 확보. 이미 있으면 기존 diary 반환됨.
   useEffect(() => {
-    if (step !== 3 || diaryText) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const diary = await createTodayDiary();
+        if (!cancelled) setDiaryId(diary.diaryId);
+      } catch (e: any) {
+        if (!cancelled) {
+          Alert.alert(
+            '일기를 시작할 수 없어요',
+            `${e?.message ?? '알 수 없는 오류'}\n\n잠시 후 다시 시도해주세요.`,
+            [{ text: '확인', onPress: () => navigation.goBack() }],
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation]);
+
+  // Step 3 진입 시: 백엔드에 segment가 이미 만들어진 상태이므로 AI 초안만 호출.
+  useEffect(() => {
+    if (step !== 3 || !diaryId || !segmentId || diaryText) return;
 
     let cancelled = false;
     (async () => {
       setIsGenerating(true);
       try {
-        const draft = await generateAIDraft({
-          moodLabel: selectedMood?.label ?? null,
-          takenAt: photoMetadata?.takenAt ?? null,
-          locationLabel: photoMetadata?.locationLabel ?? '위치 정보 없음',
-          shortMemo,
-        });
-        if (!cancelled) setDiaryText(draft);
+        const updated = await generateSegmentAiDraft(diaryId, segmentId);
+        if (!cancelled) setDiaryText(updated.aiDraft ?? '');
       } catch (e: any) {
         console.warn('AI 초안 생성 실패:', e);
         if (!cancelled) {
@@ -259,7 +288,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     return () => {
       cancelled = true;
     };
-  }, [step, diaryText, selectedMood, photoMetadata, shortMemo]);
+  }, [step, diaryId, segmentId, diaryText]);
 
   const handleMoodSelect = (mood: Mood | null) => {
     setSelectedMood(mood);
@@ -480,24 +509,84 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     }
   };
 
+  /**
+   * Step 2 → Step 3 전환. 사진 업로드 + 세그먼트 생성을 한 번에 처리.
+   * 성공하면 segmentId가 저장되고 setStep(3) 호출 → 거기서 AI 초안 useEffect가 동작.
+   */
+  const handleAdvanceToStep3 = async () => {
+    if (isAdvancing) return;
+    if (!diaryId) {
+      Alert.alert('잠시만요', '오늘 일기를 준비 중이에요. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    if (!selectedMood) {
+      Alert.alert('기분을 먼저 선택해주세요');
+      setStep(1);
+      return;
+    }
+
+    setIsAdvancing(true);
+    try {
+      // 1) 사진이 있으면 백엔드에 업로드해서 photoUrl 받기
+      let photoUrl: string | undefined;
+      if (photoMetadata?.uri) {
+        photoUrl = await uploadImage(photoMetadata.uri);
+      }
+
+      // 2) takenAt: EXIF의 로컬 시간 문자열 → ISO OffsetDateTime
+      // new Date()는 로컬 시간으로 파싱 후 toISOString()이 UTC(Z 접미사)로 변환.
+      let takenAtIso: string | undefined;
+      if (photoMetadata?.takenAt) {
+        const parsed = new Date(photoMetadata.takenAt);
+        if (!Number.isNaN(parsed.getTime())) {
+          takenAtIso = parsed.toISOString();
+        }
+      }
+
+      // 3) 세그먼트 생성
+      const segment = await createSegment(diaryId, {
+        moodSnapshot: selectedMood.apiValue,
+        photoUrl,
+        takenAt: takenAtIso,
+        latitude: photoMetadata?.latitude ?? undefined,
+        longitude: photoMetadata?.longitude ?? undefined,
+        locationName: photoMetadata?.locationLabel ?? undefined,
+        userContent: shortMemo.trim() || undefined,
+      });
+      setSegmentId(segment.segmentId);
+
+      // 4) Step 3로 진행. AI 초안은 거기 useEffect가 호출.
+      setStep(3);
+    } catch (e: any) {
+      Alert.alert(
+        '이어가지 못했어요',
+        e?.message ?? '잠시 후 다시 시도해주세요.',
+      );
+    } finally {
+      setIsAdvancing(false);
+    }
+  };
+
+  /**
+   * 사용자가 AI 초안을 다듬은 최종 본문을 PATCH로 segment에 저장 후 홈으로.
+   * 이미 segment 자체는 백엔드에 있으니 여기선 userContent만 업데이트.
+   */
   const handleSave = async () => {
     const trimmed = diaryText.trim();
     if (!trimmed) {
       Alert.alert('내용이 비어있어요', '한 줄이라도 작성한 뒤 저장해주세요.');
       return;
     }
+    if (!diaryId || !segmentId) {
+      Alert.alert(
+        '저장 준비가 안 됐어요',
+        '잠시 후 다시 시도해주세요.',
+      );
+      return;
+    }
 
     try {
-      await saveDiary({
-        mood: selectedMood,
-        content: trimmed,
-        photoUri: photoMetadata?.uri ?? null,
-        takenAt: photoMetadata?.takenAt ?? null,
-        latitude: photoMetadata?.latitude ?? null,
-        longitude: photoMetadata?.longitude ?? null,
-        locationLabel: photoMetadata?.locationLabel ?? '위치 정보 없음',
-        locationSource: photoMetadata?.locationSource ?? 'none',
-      });
+      await updateSegment(diaryId, segmentId, { userContent: trimmed });
       // 저장 직후 바로 Home으로 (Home의 useFocusEffect가 새 목록을 가져옴)
       navigation.navigate('Home');
     } catch (e: any) {
@@ -511,14 +600,9 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       '',
       [
         {
-          text: '기분 다시 선택',
-          onPress: () => {
-            setDiaryText('');
-            setStep(1);
-          },
-        },
-        {
-          text: '다시 작성',
+          text: '다시 작성 (AI에게 새 초안 부탁)',
+          // diaryText를 비우면 Step 3 useEffect가 다시 동작해서
+          // 같은 segmentId로 generateSegmentAiDraft를 재호출 → 새 초안 받음.
           onPress: () => setDiaryText(''),
         },
         { text: '직접 수정', style: 'cancel' },
@@ -653,12 +737,19 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.nextButton, isPickingPhoto && { opacity: 0.5 }]}
+          style={[
+            styles.nextButton,
+            (isPickingPhoto || isAdvancing) && { opacity: 0.5 },
+          ]}
           activeOpacity={0.85}
-          disabled={isPickingPhoto}
-          onPress={() => setStep(3)}
+          disabled={isPickingPhoto || isAdvancing}
+          onPress={handleAdvanceToStep3}
         >
-          <Text style={styles.nextButtonText}>다음</Text>
+          {isAdvancing ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.nextButtonText}>다음</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

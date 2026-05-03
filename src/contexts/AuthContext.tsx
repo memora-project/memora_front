@@ -7,7 +7,13 @@ import React, {
   ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAccessToken } from '../api/client';
+import {
+  setAccessToken,
+  setRefreshToken,
+  setOnAuthError,
+  setOnTokenRefreshed,
+} from '../api/client';
+import { logout as apiLogout } from '../api/auth';
 import { getMe, updateMe, type UserProfile } from '../api/users';
 import type { Gender } from '../types/user';
 
@@ -87,13 +93,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserPhoneNumber(profile.phoneNumber);
   }, []);
 
-  // 앱 시작 시 — 저장된 정보 복구
+  // 앱 시작 시 — 저장된 정보 복구 + axios 인터셉터 콜백 등록
   useEffect(() => {
+    // client.ts에 콜백 등록:
+    // 1) 401 + refresh 실패 시 → 자동 로그아웃 (사용자가 로그인 화면으로 돌아감)
+    // 2) refresh 성공 시 → 새 토큰을 AsyncStorage에 영속 저장
+    setOnAuthError(() => {
+      // axios 인터셉터에서 호출됨. setState만 — AsyncStorage는 이미 client.ts가 비워둠
+      AsyncStorage.multiRemove([
+        STORAGE_KEYS.USER_TOKEN,
+        STORAGE_KEYS.USER_REFRESH_TOKEN,
+      ]).catch(() => {});
+      setIsLoggedIn(false);
+      setUserEmail(null);
+      setUserName(null);
+      setUserGender(null);
+      setUserBirthDate(null);
+      setUserAddress(null);
+      setUserPhoneNumber(null);
+      setUserCreatedAt(null);
+    });
+
+    setOnTokenRefreshed(tokens => {
+      AsyncStorage.multiSet([
+        [STORAGE_KEYS.USER_TOKEN, tokens.accessToken],
+        [STORAGE_KEYS.USER_REFRESH_TOKEN, tokens.refreshToken],
+      ]).catch(() => {});
+    });
+
     const restoreSession = async () => {
       let savedToken: string | null = null;
       try {
         const [
           token,
+          refreshToken,
           email,
           name,
           gender,
@@ -103,6 +136,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           createdAt,
         ] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN),
+          AsyncStorage.getItem(STORAGE_KEYS.USER_REFRESH_TOKEN),
           AsyncStorage.getItem(STORAGE_KEYS.USER_EMAIL),
           AsyncStorage.getItem(STORAGE_KEYS.USER_NAME),
           AsyncStorage.getItem(STORAGE_KEYS.USER_GENDER),
@@ -115,6 +149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (token) {
           setAccessToken(token); // ← 이후 모든 API 요청에 자동 첨부
+          setRefreshToken(refreshToken); // 401 시 재발급용
           setIsLoggedIn(true);
           // 캐시된 값으로 일단 빠르게 첫 렌더 — 잠시 후 백엔드 응답으로 덮어씀
           setUserEmail(email);
@@ -144,6 +179,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     restoreSession();
+
+    return () => {
+      setOnAuthError(null);
+      setOnTokenRefreshed(null);
+    };
   }, [persistProfile]);
 
   const login = useCallback(
@@ -157,6 +197,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, email),
         ]);
         setAccessToken(accessToken);
+        setRefreshToken(refreshToken); // 401 시 재발급용
         tokensSaved = true;
 
         // 2. 백엔드에서 내 정보 조회 후 AsyncStorage + state 채우기
@@ -174,6 +215,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             STORAGE_KEYS.USER_EMAIL,
           ]);
           setAccessToken(null);
+          setRefreshToken(null);
         }
         console.error('로그인 처리 실패:', error);
         throw error;
@@ -183,6 +225,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 
   const logout = useCallback(async () => {
+    // 백엔드에 logout 요청 — DB의 refresh token 무효화. 실패해도 클라이언트는 진행.
+    await apiLogout();
+
     try {
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.USER_TOKEN,
@@ -196,6 +241,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         STORAGE_KEYS.USER_CREATED_AT,
       ]);
       setAccessToken(null);
+      setRefreshToken(null);
       setIsLoggedIn(false);
       setUserEmail(null);
       setUserName(null);

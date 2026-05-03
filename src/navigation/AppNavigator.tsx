@@ -70,7 +70,7 @@ const AuthStackNavigator: React.FC = () => {
 export type DiaryStackParamList = {
   Home: undefined;
   MidDiary: undefined;
-  Detail: { entryId: string };
+  Detail: { diaryId: number };
 };
 
 export type HomeScreenProps = NativeStackScreenProps<DiaryStackParamList, 'Home'>;

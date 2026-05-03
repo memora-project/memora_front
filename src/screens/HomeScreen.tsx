@@ -13,13 +13,21 @@ import { useFocusEffect } from '@react-navigation/native';
 import AppHeader from '../components/AppHeader';
 import Grandchild, { type GrandchildMood } from '../components/Grandchild';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 
 import type { HomeScreenProps } from '../navigation/AppNavigator';
-import { getAllDiaries, type DiaryEntry } from '../storage/diaryStorage';
+import { getDiariesByMonth, type DiaryResponse } from '../api/diaries';
+import { MOOD_INFO } from '../constants/moods';
 
-const formatDate = (iso: string): string => {
-  return iso.slice(0, 10);
+const todayString = (): string => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
+
+const currentYearMonth = (): string => todayString().slice(0, 7); // 'YYYY-MM'
 
 // 시간대별 인사말
 const getGreeting = (
@@ -61,15 +69,16 @@ const getGreeting = (
 };
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [diaries, setDiaries] = useState<DiaryResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { scale } = useSettings();
-  const userName = null;
-  // 오늘 일기 작성 여부 확인
+  const { userName } = useAuth();
+
+  // 오늘 일기가 있는지 = 이번 달 diaries 중 targetDate가 오늘인 게 있는지
   const hasEntryToday = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return entries.some(entry => formatDate(entry.createdAt) === today);
-  }, [entries]);
+    const today = todayString();
+    return diaries.some(d => d.targetDate === today);
+  }, [diaries]);
 
   // 손주 인사말
   const greeting = useMemo(
@@ -77,15 +86,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     [userName, hasEntryToday],
   );
 
-  // 화면이 포커스될 때마다 (저장 후 돌아왔을 때 포함) 최신 목록을 다시 가져온다.
+  // 화면이 포커스될 때마다 (저장 후 돌아왔을 때 포함) 이번 달 일기를 다시 가져온다.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         setIsLoading(true);
         try {
-          const list = await getAllDiaries();
-          if (!cancelled) setEntries(list);
+          const list = await getDiariesByMonth(currentYearMonth());
+          if (!cancelled) setDiaries(list);
+        } catch (e) {
+          console.warn('일기 목록 조회 실패:', e);
+          if (!cancelled) setDiaries([]);
         } finally {
           if (!cancelled) setIsLoading(false);
         }
@@ -96,8 +108,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }, []),
   );
 
-  const handleOpenDetail = (entry: DiaryEntry) => {
-    navigation.navigate('Detail', { entryId: entry.id });
+  const handleOpenDetail = (diary: DiaryResponse) => {
+    navigation.navigate('Detail', { diaryId: diary.diaryId });
   };
 
   const handleWriteNew = () => {
@@ -111,32 +123,37 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         message={greeting.message}
         mood={greeting.mood}
         size="large"
-        // photoUri={null}  // TODO: 미래 — 사용자가 설정한 손주 사진
-        // gender="grandson" // TODO: 미래 — 설정에서 손자/손녀 선택
       />
     </View>
   );
 
-  const renderItem = ({ item }: { item: DiaryEntry }) => (
-    <TouchableOpacity
-      style={styles.item}
-      activeOpacity={0.85}
-      onPress={() => handleOpenDetail(item)}
-    >
-      <View style={styles.itemHeader}>
-        <Text style={[styles.itemDate, { fontSize: scale(13) }]}>
-          {formatDate(item.createdAt)}
-        </Text>
-        {item.mood && <Text style={styles.itemMood}>{item.mood.emoji}</Text>}
-      </View>
-      <Text
-        style={[styles.itemSummary, { fontSize: scale(15) }]}
-        numberOfLines={2}
+  const renderItem = ({ item }: { item: DiaryResponse }) => {
+    const moodInfo = item.finalMood ? MOOD_INFO[item.finalMood] : null;
+    // 본문: 완료된 final 일기가 있으면 그걸, 아니면 AI 초안, 둘 다 없으면 placeholder
+    const preview =
+      item.finalContent ?? item.aiDraft ?? '(아직 작성 중인 일기예요)';
+
+    return (
+      <TouchableOpacity
+        style={styles.item}
+        activeOpacity={0.85}
+        onPress={() => handleOpenDetail(item)}
       >
-        {item.content}
-      </Text>
-    </TouchableOpacity>
-  );
+        <View style={styles.itemHeader}>
+          <Text style={[styles.itemDate, { fontSize: scale(13) }]}>
+            {item.targetDate}
+          </Text>
+          {moodInfo && <Text style={styles.itemMood}>{moodInfo.emoji}</Text>}
+        </View>
+        <Text
+          style={[styles.itemSummary, { fontSize: scale(15) }]}
+          numberOfLines={2}
+        >
+          {preview}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
@@ -161,13 +178,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={entries}
-          keyExtractor={item => item.id}
+          data={diaries}
+          keyExtractor={item => String(item.diaryId)}
           renderItem={renderItem}
           ListHeaderComponent={renderListHeader}
           contentContainerStyle={[
             styles.listContent,
-            entries.length === 0 && styles.listContentEmpty,
+            diaries.length === 0 && styles.listContentEmpty,
           ]}
           ListEmptyComponent={renderEmpty}
           showsVerticalScrollIndicator={false}
