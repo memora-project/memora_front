@@ -290,7 +290,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     };
   }, [step, diaryId, segmentId, diaryText]);
 
-  const handleMoodSelect = (mood: Mood | null) => {
+  const handleMoodSelect = (mood: Mood) => {
     setSelectedMood(mood);
     setStep(2);
   };
@@ -640,13 +640,6 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         ))}
       </View>
-
-      <TouchableOpacity
-        style={styles.skipButton}
-        onPress={() => handleMoodSelect(null)}
-      >
-        <Text style={styles.skipText}>기분 선택 안 함</Text>
-      </TouchableOpacity>
     </View>
   );
 
@@ -709,7 +702,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
 
       <View style={styles.memoBlock}>
         <Text style={styles.memoLabel}>
-          오늘 무슨 일이 있었나요? (키워드나 한 줄 메모)
+          오늘 무슨 일이 있었나요? <Text style={styles.memoOptional}>(선택)</Text>
         </Text>
         <TextInput
           style={styles.memoInput}
@@ -729,16 +722,9 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
 
       <View style={styles.step2Actions}>
         <TouchableOpacity
-          style={styles.skipInlineButton}
-          disabled={isPickingPhoto}
-          onPress={() => handlePhotoPick('skip')}
-        >
-          <Text style={styles.skipText}>사진 선택 안 함</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={[
             styles.nextButton,
+            styles.nextButtonFull,
             (isPickingPhoto || isAdvancing) && { opacity: 0.5 },
           ]}
           activeOpacity={0.85}
@@ -977,6 +963,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 10,
   },
+  memoOptional: {
+    color: '#A09B95',
+    fontWeight: '400',
+  },
   memoInput: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -1008,6 +998,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nextButtonFull: {
+    width: '100%',
   },
   nextButtonText: {
     color: '#FFFFFF',
