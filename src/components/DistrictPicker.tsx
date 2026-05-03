@@ -33,7 +33,8 @@ const DistrictPicker: React.FC<Props> = ({
   // 사용자가 선택한 구 (동 선택 단계로 가기 위해)
   const [selectedGu, setSelectedGu] = useState<string | null>(null);
 
-  const selected = DAEJEON_DISTRICTS.find(d => d.value === selectedValue);
+  // selectedValue는 District.label 문자열("유성구 봉명동"). 백엔드/AuthContext가 label로 저장하므로 label로 매칭.
+  const selected = DAEJEON_DISTRICTS.find(d => d.label === selectedValue);
 
   // 모달 열 때 — 항상 구 선택 단계부터
   const handleOpen = () => {
@@ -86,7 +87,7 @@ const DistrictPicker: React.FC<Props> = ({
 
   // ─── 동 리스트 렌더 ───
   const renderDongItem = ({ item }: { item: District }) => {
-    const isActive = item.value === selectedValue;
+    const isActive = item.label === selectedValue;
     return (
       <TouchableOpacity
         style={[styles.listItem, isActive && styles.listItemActive]}
@@ -109,8 +110,14 @@ const DistrictPicker: React.FC<Props> = ({
         onPress={handleOpen}
         activeOpacity={0.7}
       >
-        <Text style={[styles.triggerText, !selected && styles.triggerPlaceholder]}>
-          {selected ? selected.label : placeholder}
+        <Text
+          style={[
+            styles.triggerText,
+            !selectedValue && styles.triggerPlaceholder,
+          ]}
+        >
+          {/* selected를 못 찾아도(예: 우리 리스트에 없는 주소) 저장된 문자열을 그대로 보여줌 */}
+          {selected ? selected.label : selectedValue || placeholder}
         </Text>
         <Text style={styles.triggerArrow}>▼</Text>
       </TouchableOpacity>

@@ -15,11 +15,13 @@ import DistrictPicker from '../components/DistrictPicker';
 import BirthdatePicker from '../components/BirthdatePicker';
 import type { District } from '../constants/districts';
 import type { SignUpScreenProps } from '../navigation/AppNavigator';
-import type { Gender } from '../contexts/AuthContext';
+import { useAuth, type Gender } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { signup as apiSignup, type SignupRequest } from '../api/auth';
 
 const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
+  const { login: authLogin } = useAuth();
 
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -30,9 +32,13 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [birthDate, setBirthDate] = useState('');
   const [address, setAddress] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
+  // isReportShared: 명세상 signup body에 없음 → 추후 PATCH /users/me로 별도 저장 예정
   const [isReportShared, setIsReportShared] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
+    if (isLoading) return;
+
     if (!email.trim()) {
       Alert.alert('알림', '이메일을 입력해 주세요.');
       return;
@@ -75,28 +81,36 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       return;
     }
 
-    // TODO: 백엔드 연동 후 — POST /auth/signup 호출
-    // const response = await fetch('/api/v1/auth/signup', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     login_id: email, password, name, gender,
-    //     birth_date: birthDate, address,
-    //     phone_number: phoneNumber,
-    //     is_report_shared: isReportShared,
-    //   }),
-    // });
+    setIsLoading(true);
+    try {
+      const trimmedEmail = email.trim();
+      const trimmedEmergency = emergencyContact.trim();
+      const request: SignupRequest = {
+        loginId: trimmedEmail,
+        password,
+        name: name.trim(),
+        gender,
+        birthDate,
+        phoneNumber: phoneNumber.trim(),
+        address,
+        ...(trimmedEmergency.length > 0
+          ? { emergencyContact: trimmedEmergency }
+          : {}),
+      };
 
-    Alert.alert(
-      '회원가입 완료',
-      `${name}님, 환영합니다!\n로그인 화면으로 돌아갑니다.`,
-      [
-        {
-          text: '확인',
-          onPress: () => navigation.goBack(),
-        },
-      ],
-    );
+      const tokens = await apiSignup(request);
+      // 자동 로그인 — AuthContext.login이 토큰을 저장하고 isLoggedIn=true로 만들면
+      // AppNavigator가 메인 탭으로 자동 전환됨
+      await authLogin(trimmedEmail, tokens.accessToken, tokens.refreshToken);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.';
+      Alert.alert('회원가입 실패', message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderGenderOption = (value: Gender, label: string) => {
@@ -295,11 +309,14 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         )}
 
         <TouchableOpacity
-          style={styles.signUpBtn}
+          style={[styles.signUpBtn, isLoading && styles.signUpBtnDisabled]}
           onPress={handleSignUp}
           activeOpacity={0.85}
+          disabled={isLoading}
         >
-          <Text style={[styles.signUpBtnText, { fontSize: scale(17) }]}>가입하기</Text>
+          <Text style={[styles.signUpBtnText, { fontSize: scale(17) }]}>
+            {isLoading ? '가입 중...' : '가입하기'}
+          </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
     </SafeAreaView>
@@ -417,6 +434,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 12,
+  },
+  signUpBtnDisabled: {
+    opacity: 0.6,
   },
   signUpBtnText: {
     color: '#FFFFFF',
