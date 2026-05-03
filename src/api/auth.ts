@@ -54,3 +54,15 @@ export const signup = async (request: SignupRequest): Promise<AuthTokens> => {
     throw new Error(extractApiErrorMessage(e, '회원가입에 실패했습니다.'));
   }
 };
+
+/**
+ * POST /auth/logout — 서버에 logout 요청 (DB의 refresh token 무효화).
+ * 네트워크 실패해도 클라이언트 로그아웃은 진행해야 하므로 에러를 삼킨다.
+ */
+export const logout = async (): Promise<void> => {
+  try {
+    await apiClient.post('/auth/logout');
+  } catch {
+    // 무시: 로컬 토큰 정리는 호출자가 항상 수행
+  }
+};
