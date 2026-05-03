@@ -1,5 +1,12 @@
 import React, { useCallback, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
@@ -209,35 +216,40 @@ const DiaryListScreen: React.FC = () => {
             />
           </View>
 
-          {/* 선택된 날짜의 일기 */}
+          {/* 선택된 날짜의 일기 — 라벨은 고정, 카드 리스트만 스크롤 */}
           <View style={styles.selectedSection}>
             <Text style={[styles.selectedDateLabel, { fontSize: scale(14) }]}>
               {formatKoreanDate(selectedDate)}
             </Text>
 
-            {selectedEntries.length > 0 ? (
-              selectedEntries.map(entry => (
-                <View key={entry.id} style={styles.entryCard}>
-                  <View style={styles.entryHeader}>
-                    {entry.mood && (
-                      <Text style={styles.entryMood}>{entry.mood.emoji}</Text>
-                    )}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.selectedScroll}
+            >
+              {selectedEntries.length > 0 ? (
+                selectedEntries.map(entry => (
+                  <View key={entry.id} style={styles.entryCard}>
+                    <View style={styles.entryHeader}>
+                      {entry.mood && (
+                        <Text style={styles.entryMood}>{entry.mood.emoji}</Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[styles.entryContent, { fontSize: scale(14) }]}
+                      numberOfLines={3}
+                    >
+                      {entry.content}
+                    </Text>
                   </View>
-                  <Text
-                    style={[styles.entryContent, { fontSize: scale(14) }]}
-                    numberOfLines={3}
-                  >
-                    {entry.content}
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={[styles.emptyText, { fontSize: scale(14) }]}>
+                    이 날의 일기가 없어요
                   </Text>
                 </View>
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={[styles.emptyText, { fontSize: scale(14) }]}>
-                  이 날의 일기가 없어요
-                </Text>
-              </View>
-            )}
+              )}
+            </ScrollView>
           </View>
         </View>
       )}
@@ -316,6 +328,10 @@ const styles = StyleSheet.create({
   selectedSection: {
     flex: 1,
     paddingHorizontal: 8,
+  },
+  selectedScroll: {
+    // 마지막 카드와 탭바 간격 + 스크롤 끝 여백
+    paddingBottom: 24,
   },
   selectedDateLabel: {
     fontWeight: '600',
