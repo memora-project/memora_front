@@ -1,15 +1,26 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAccessToken } from '../api/client';
+import { getMe, updateMe, type UserProfile } from '../api/users';
+import type { Gender } from '../types/user';
 
 /**
  * 백엔드 DB 스키마와 일치하는 타입 정의
  * 백엔드 컬럼: login_id, password, name, gender, birth_date, address, phone_number, is_report_shared, kakao_id, created_at
  * 프론트는 카멜케이스로 변환해서 사용
  */
-export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
+export type { Gender };
 
 const STORAGE_KEYS = {
-  USER_TOKEN: '@memora:user_token',
+  USER_TOKEN: '@memora:user_token',                   // accessToken
+  USER_REFRESH_TOKEN: '@memora:user_refresh_token',
   USER_EMAIL: '@memora:user_email',           // 백엔드 login_id (이메일 형식)
   USER_NAME: '@memora:user_name',
   USER_GENDER: '@memora:user_gender',
@@ -28,8 +39,8 @@ type AuthContextValue = {
   userBirthDate: string | null;      // 'YYYY-MM-DD'
   userAddress: string | null;        // '유성구 봉명동'
   userPhoneNumber: string | null;
-  userCreatedAt: string | null;      // 가입일시 (백엔드 연동 후 진짜 값, 지금은 null)
-  login: (email: string, token: string) => Promise<void>;
+  userCreatedAt: string | null;      // 가입일시 (백엔드 응답에 없으면 null 유지)
+  login: (email: string, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (
     name: string,
@@ -55,9 +66,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userPhoneNumber, setUserPhoneNumber] = useState<string | null>(null);
   const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
 
+  /**
+   * /users/me 응답을 AsyncStorage + state에 일괄 반영.
+   * 로그인 직후, 회원가입 직후, PATCH /users/me 직후 호출.
+   */
+  const persistProfile = useCallback(async (profile: UserProfile) => {
+    await Promise.all([
+      AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, profile.loginId),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_NAME, profile.name),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_GENDER, profile.gender),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_BIRTH_DATE, profile.birthDate),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_ADDRESS, profile.address),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_PHONE_NUMBER, profile.phoneNumber),
+    ]);
+    setUserEmail(profile.loginId);
+    setUserName(profile.name);
+    setUserGender(profile.gender);
+    setUserBirthDate(profile.birthDate);
+    setUserAddress(profile.address);
+    setUserPhoneNumber(profile.phoneNumber);
+  }, []);
+
   // 앱 시작 시 — 저장된 정보 복구
   useEffect(() => {
     const restoreSession = async () => {
+      let savedToken: string | null = null;
       try {
         const [
           token,
@@ -78,9 +111,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           AsyncStorage.getItem(STORAGE_KEYS.USER_PHONE_NUMBER),
           AsyncStorage.getItem(STORAGE_KEYS.USER_CREATED_AT),
         ]);
+        savedToken = token;
 
         if (token) {
+          setAccessToken(token); // ← 이후 모든 API 요청에 자동 첨부
           setIsLoggedIn(true);
+          // 캐시된 값으로 일단 빠르게 첫 렌더 — 잠시 후 백엔드 응답으로 덮어씀
           setUserEmail(email);
           setUserName(name);
           setUserGender(gender as Gender | null);
@@ -94,37 +130,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } finally {
         setIsLoading(false);
       }
+
+      // 로딩 화면이 사라진 뒤 백엔드에서 최신 프로필 갱신.
+      // 실패해도 캐시된 값으로 계속 사용 가능 (오프라인 대응).
+      if (savedToken) {
+        try {
+          const profile = await getMe();
+          await persistProfile(profile);
+        } catch (e) {
+          console.warn('백그라운드 프로필 갱신 실패 (캐시 사용):', e);
+        }
+      }
     };
 
     restoreSession();
-  }, []);
+  }, [persistProfile]);
 
-  const login = useCallback(async (email: string, token: string) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, email);
+  const login = useCallback(
+    async (email: string, accessToken: string, refreshToken: string) => {
+      let tokensSaved = false;
+      try {
+        // 1. 토큰 저장 + 인터셉터 등록
+        await Promise.all([
+          AsyncStorage.setItem(STORAGE_KEYS.USER_TOKEN, accessToken),
+          AsyncStorage.setItem(STORAGE_KEYS.USER_REFRESH_TOKEN, refreshToken),
+          AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, email),
+        ]);
+        setAccessToken(accessToken);
+        tokensSaved = true;
 
-      // TODO: 백엔드 연동 후 — GET /users/me 호출해서 사용자 정보 받아오기
-      // const response = await fetch('/api/v1/users/me', {
-      //   headers: { Authorization: `Bearer ${token}` }
-      // });
-      // const userData = await response.json();
-      // setUserName(userData.name);
-      // setUserGender(userData.gender);
-      // ... 등
+        // 2. 백엔드에서 내 정보 조회 후 AsyncStorage + state 채우기
+        const profile = await getMe();
+        await persistProfile(profile);
 
-      setIsLoggedIn(true);
-      setUserEmail(email);
-    } catch (error) {
-      console.error('로그인 저장 실패:', error);
-      throw error;
-    }
-  }, []);
+        // 3. 모든 데이터 준비된 후에 로그인 상태 마킹
+        setIsLoggedIn(true);
+      } catch (error) {
+        // 실패 시 토큰 롤백 — 부분적 로그인 상태 방지
+        if (tokensSaved) {
+          await AsyncStorage.multiRemove([
+            STORAGE_KEYS.USER_TOKEN,
+            STORAGE_KEYS.USER_REFRESH_TOKEN,
+            STORAGE_KEYS.USER_EMAIL,
+          ]);
+          setAccessToken(null);
+        }
+        console.error('로그인 처리 실패:', error);
+        throw error;
+      }
+    },
+    [persistProfile],
+  );
 
   const logout = useCallback(async () => {
     try {
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.USER_TOKEN,
+        STORAGE_KEYS.USER_REFRESH_TOKEN,
         STORAGE_KEYS.USER_EMAIL,
         STORAGE_KEYS.USER_NAME,
         STORAGE_KEYS.USER_GENDER,
@@ -133,6 +195,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         STORAGE_KEYS.USER_PHONE_NUMBER,
         STORAGE_KEYS.USER_CREATED_AT,
       ]);
+      setAccessToken(null);
       setIsLoggedIn(false);
       setUserEmail(null);
       setUserName(null);
@@ -150,27 +213,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateProfile = useCallback(
     async (name: string, birthDate: string, address: string) => {
       try {
-        // TODO: 백엔드 연동 후 — PATCH /users/me 호출
-        // await fetch('/api/v1/users/me', {
-        //   method: 'PATCH',
-        //   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        //   body: JSON.stringify({ name, birth_date: birthDate, address }),
-        // });
-
-        await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEYS.USER_NAME, name),
-          AsyncStorage.setItem(STORAGE_KEYS.USER_BIRTH_DATE, birthDate),
-          AsyncStorage.setItem(STORAGE_KEYS.USER_ADDRESS, address),
-        ]);
-        setUserName(name);
-        setUserBirthDate(birthDate);
-        setUserAddress(address);
+        // PATCH /users/me — 변경 필드만. 응답으로 전체 프로필이 돌아오므로 그것을 source of truth로 반영.
+        const profile = await updateMe({ name, birthDate, address });
+        await persistProfile(profile);
       } catch (error) {
         console.error('프로필 업데이트 실패:', error);
         throw error;
       }
     },
-    [],
+    [persistProfile],
   );
 
   const value: AuthContextValue = {

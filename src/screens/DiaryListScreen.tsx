@@ -23,7 +23,18 @@ type MarkedDateInfo = {
   selectedColor?: string;
 };
 
-const toDateKey = (iso: string): string => iso.slice(0, 10);
+/**
+ * ISO 문자열 → 'YYYY-MM-DD' (로컬 타임존 기준).
+ * `iso.slice(0, 10)`을 쓰면 UTC 기준이라 한국에서 자정~오전에 작성한 일기가 전날로 잡힘.
+ * 캘린더가 보여주는 셀(`day.dateString`)은 로컬 날짜이므로 여기도 로컬로 맞춤.
+ */
+const toDateKey = (iso: string): string => {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 const formatKoreanDate = (dateStr: string): string => {
   if (!dateStr) return '';

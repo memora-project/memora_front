@@ -16,14 +16,18 @@ import type { LoginScreenProps } from '../navigation/AppNavigator';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { login as apiLogin } from '../api/auth';
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const { login } = useAuth();
   const { scale } = useSettings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (isLoading) return;
+
     if (!email.trim()) {
       Alert.alert('알림', '이메일을 입력해 주세요.');
       return;
@@ -37,12 +41,19 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       return;
     }
 
+    setIsLoading(true);
     try {
-      // TODO: 실제 백엔드 인증 후 받은 토큰을 저장. 지금은 임시 토큰.
-      const fakeToken = 'temp-token-' + Date.now();
-      await login(email, fakeToken);
-    } catch (error) {
-      Alert.alert('오류', '로그인 처리 중 문제가 발생했습니다.');
+      const trimmedEmail = email.trim();
+      const tokens = await apiLogin({ loginId: trimmedEmail, password });
+      await login(trimmedEmail, tokens.accessToken, tokens.refreshToken);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.';
+      Alert.alert('로그인 실패', message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -99,11 +110,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               </View>
 
               <TouchableOpacity
-                style={styles.loginBtn}
+                style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]}
                 onPress={handleLogin}
                 activeOpacity={0.85}
+                disabled={isLoading}
               >
-                <Text style={[styles.loginBtnText, { fontSize: scale(17) }]}>로그인</Text>
+                <Text style={[styles.loginBtnText, { fontSize: scale(17) }]}>
+                  {isLoading ? '로그인 중...' : '로그인'}
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -180,6 +194,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 12,
+  },
+  loginBtnDisabled: {
+    opacity: 0.6,
   },
   loginBtnText: {
     color: '#FFFFFF',
