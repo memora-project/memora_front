@@ -90,6 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       AsyncStorage.setItem(STORAGE_KEYS.USER_ADDRESS, profile.address),
       AsyncStorage.setItem(STORAGE_KEYS.USER_PHONE_NUMBER, profile.phoneNumber),
       AsyncStorage.setItem(STORAGE_KEYS.USER_EMERGENCY_CONTACT, emergencyContact),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_CREATED_AT, profile.createdAt),
     ]);
     setUserEmail(profile.loginId);
     setUserName(profile.name);
@@ -98,6 +99,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserAddress(profile.address);
     setUserPhoneNumber(profile.phoneNumber);
     setUserEmergencyContact(emergencyContact || null);
+    setUserCreatedAt(profile.createdAt);
   }, []);
 
   // 앱 시작 시 — 저장된 정보 복구
@@ -179,13 +181,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         tokensSaved = true;
 
         // 2. 백엔드에서 내 정보 조회 후 AsyncStorage + state 채우기
+        //    가입일시(createdAt)도 UserProfile에 포함되어 persistProfile이 같이 처리.
         const profile = await getMe();
         await persistProfile(profile);
-
-        // 가입 일시는 백엔드 /users/me에 아직 없음. 신규 회원가입 직전에
-        // SignUpScreen이 AsyncStorage에 미리 저장해두면 여기서 끌어올림.
-        const createdAt = await AsyncStorage.getItem(STORAGE_KEYS.USER_CREATED_AT);
-        setUserCreatedAt(createdAt);
 
         // 3. 모든 데이터 준비된 후에 로그인 상태 마킹
         setIsLoggedIn(true);

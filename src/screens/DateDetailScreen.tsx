@@ -10,6 +10,8 @@ import {
   Modal,
   TextInput,
   Platform,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -19,6 +21,7 @@ import {
   getDiariesByMonth,
   updateDiary,
   deleteDiary,
+  deleteFinalDiary,
   type DiaryResponse,
 } from '../api/diaries';
 import {
@@ -27,8 +30,11 @@ import {
   deleteSegment,
   type SegmentResponse,
 } from '../api/segments';
+import { resolveImageUrl } from '../api/files';
 import { MOOD_INFO } from '../constants/moods';
 import type { DateDetailScreenProps } from '../navigation/AppNavigator';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const formatKoreanDate = (dateStr: string): string => {
   if (!dateStr) return '';
@@ -48,6 +54,10 @@ const formatTime = (iso: string): string => {
 /**
  * 그날의 일기 카드들을 segment / final 구분 없이 통합한 ViewModel.
  * `kind`로 백엔드 호출(수정/삭제)을 분기한다.
+ *
+ * `photos`는 카드에 표시할 사진 url들.
+ *  - segment: 그 segment의 첨부 사진들
+ *  - final:   그날 모든 segment의 사진을 순서대로 합친 것 (마무리 일기는 그날의 회상 carousel 역할)
  */
 type CardItem =
   | {
@@ -57,6 +67,7 @@ type CardItem =
       moodEmoji: string;
       content: string;
       time: string;
+      photos: string[];
       isFinal: false;
     }
   | {
@@ -66,8 +77,17 @@ type CardItem =
       moodEmoji: string;
       content: string;
       time: string;
+      photos: string[];
       isFinal: true;
     };
+
+const collectSegmentPhotos = (s: SegmentResponse): string[] => {
+  if (s.photos && s.photos.length > 0) {
+    return s.photos.map(p => p.photoUrl);
+  }
+  // 레거시 호환 — photos가 비어있고 단일 photoUrl만 있는 경우
+  return s.photoUrl ? [s.photoUrl] : [];
+};
 
 /** 표시 규칙: isEdited면 사용자 본문, 아니면 AI 초안. */
 const segmentBody = (s: SegmentResponse): string =>
@@ -129,6 +149,13 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
     }, [reload]),
   );
 
+  // 그날 모든 segment의 사진을 stepOrder 오름차순으로 합친 url 배열.
+  // 마무리 일기 카드/뷰어에서 그날 회상 carousel로 사용.
+  const allDayPhotos: string[] = segments
+    .slice()
+    .sort((a, b) => a.stepOrder - b.stepOrder)
+    .flatMap(s => collectSegmentPhotos(s));
+
   // 카드 리스트 — segment N개 + (final 완료된 경우) 마무리 카드 1개.
   // 정렬: createdAt(final은 updatedAt) 내림차순 — 가장 최근 일기가 맨 위.
   // final 작성 후 추가 segment가 있으면 그 추가 segment가 final보다 위에 올 수도 있음.
@@ -140,6 +167,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
       moodEmoji: MOOD_INFO[s.moodSnapshot].emoji,
       content: segmentBody(s),
       time: formatTime(s.createdAt),
+      photos: collectSegmentPhotos(s),
       isFinal: false,
     })),
     ...(diary && diary.status === 'COMPLETED'
@@ -151,11 +179,17 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
             moodEmoji: diary.finalMood ? MOOD_INFO[diary.finalMood].emoji : '🌙',
             content: diaryBody(diary),
             time: formatTime(diary.updatedAt),
+            // 마무리 일기는 그날 모든 segment 사진을 carousel로 회상.
+            photos: allDayPhotos,
             isFinal: true as const,
           },
         ]
       : []),
   ].sort((a, b) => {
+    // 마무리 일기는 무조건 상단 고정.
+    if (a.isFinal && !b.isFinal) return -1;
+    if (!a.isFinal && b.isFinal) return 1;
+    // 같은 kind끼리는 시간 내림차순 (가장 최근이 위).
     const ta = a.kind === 'segment' ? a.segment.createdAt : a.diary.updatedAt;
     const tb = b.kind === 'segment' ? b.segment.createdAt : b.diary.updatedAt;
     return tb.localeCompare(ta);
@@ -178,7 +212,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
     closeActionSheet();
     const message =
       card.kind === 'final'
-        ? '마무리 일기를 삭제하면 그날의 모든 기록이 함께 사라져요.'
+        ? '마무리 일기만 지워지고 그날의 다른 일기는 그대로 남아요.'
         : '한 번 삭제한 일기는 다시 되돌릴 수 없어요.';
     Alert.alert('일기를 삭제할까요?', message, [
       { text: '취소', style: 'cancel' },
@@ -191,7 +225,8 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
               if (!diary) throw new Error('일기를 찾을 수 없어요.');
               await deleteSegment(diary.diaryId, card.segment.segmentId);
             } else {
-              await deleteDiary(card.diary.diaryId);
+              // 마무리 일기만 reset — diary 컨테이너와 segments는 유지.
+              await deleteFinalDiary(card.diary.diaryId);
             }
             await reload();
           } catch (e: any) {
@@ -266,6 +301,11 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {cards.length > 0 && (
+            <Text style={[styles.entryCount, { fontSize: scale(13) }]}>
+              {cards.length}개의 일기를 작성했습니다
+            </Text>
+          )}
           {cards.length > 0 ? (
             cards.map(card => (
               <TouchableOpacity
@@ -279,7 +319,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
               >
                 <View style={styles.entryHeader}>
                   <Text style={styles.entryMood}>{card.moodEmoji}</Text>
-                  {card.isFinal && (
+                  {card.isFinal ? (
                     <View style={styles.finalBadge}>
                       <Text
                         style={[styles.finalBadgeText, { fontSize: scale(11) }]}
@@ -287,11 +327,36 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                         🌙 마무리 일기
                       </Text>
                     </View>
+                  ) : (
+                    <View style={styles.segmentBadge}>
+                      <Text
+                        style={[styles.segmentBadgeText, { fontSize: scale(11) }]}
+                      >
+                        {card.segment.stepOrder}번째 일기
+                      </Text>
+                    </View>
                   )}
                   <Text style={[styles.entryTime, { fontSize: scale(13) }]}>
                     {card.time}
                   </Text>
                 </View>
+                {card.photos.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.cardPhotoStripContent}
+                    style={styles.cardPhotoStrip}
+                  >
+                    {card.photos.map((url, idx) => (
+                      <Image
+                        key={`${card.key}-thumb-${idx}`}
+                        source={{ uri: resolveImageUrl(url) }}
+                        style={styles.cardPhotoThumb}
+                        resizeMode="cover"
+                      />
+                    ))}
+                  </ScrollView>
+                )}
                 <Text
                   style={[styles.entryContent, { fontSize: scale(14) }]}
                   numberOfLines={3}
@@ -347,7 +412,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                   <Text style={styles.viewerMood}>
                     {actionCard?.moodEmoji}
                   </Text>
-                  {actionCard?.isFinal && (
+                  {actionCard?.isFinal ? (
                     <View style={styles.finalBadge}>
                       <Text
                         style={[styles.finalBadgeText, { fontSize: scale(11) }]}
@@ -355,11 +420,47 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                         🌙 마무리 일기
                       </Text>
                     </View>
-                  )}
+                  ) : actionCard ? (
+                    <View style={styles.segmentBadge}>
+                      <Text
+                        style={[styles.segmentBadgeText, { fontSize: scale(11) }]}
+                      >
+                        {actionCard.segment.stepOrder}번째 일기
+                      </Text>
+                    </View>
+                  ) : null}
                   <Text style={[styles.viewerTime, { fontSize: scale(13) }]}>
                     {actionCard?.time}
                   </Text>
                 </View>
+
+                {actionCard && actionCard.photos.length > 0 && (
+                  <View style={styles.carouselWrap}>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      showsHorizontalScrollIndicator={false}
+                      decelerationRate="fast"
+                    >
+                      {actionCard.photos.map((url, idx) => (
+                        <Image
+                          key={`viewer-${idx}`}
+                          source={{ uri: resolveImageUrl(url) }}
+                          style={styles.carouselImage}
+                          resizeMode="cover"
+                        />
+                      ))}
+                    </ScrollView>
+                    {actionCard.photos.length > 1 && (
+                      <Text
+                        style={[styles.carouselHint, { fontSize: scale(12) }]}
+                      >
+                        ← 옆으로 넘겨 보세요 ({actionCard.photos.length}장) →
+                      </Text>
+                    )}
+                  </View>
+                )}
+
                 <Text style={[styles.viewerContent, { fontSize: scale(15) }]}>
                   {actionCard?.content ?? ''}
                 </Text>
@@ -372,53 +473,25 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                   onPress={handlePickEdit}
                 >
                   <Text style={styles.actionItemEmoji}>✏️</Text>
-                  <View style={styles.actionItemTextWrap}>
-                    <Text style={[styles.actionItemTitle, { fontSize: scale(17) }]}>
-                      내용 수정
-                    </Text>
-                    <Text style={[styles.actionItemDesc, { fontSize: scale(13) }]}>
-                      일기 글을 다시 써요
-                    </Text>
-                  </View>
+                  <Text style={[styles.actionItemTitle, { fontSize: scale(14) }]}>
+                    수정
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.actionItem, styles.actionItemDanger]}
+                  style={styles.actionItem}
                   activeOpacity={0.7}
                   onPress={handlePickDelete}
                 >
                   <Text style={styles.actionItemEmoji}>🗑️</Text>
-                  <View style={styles.actionItemTextWrap}>
-                    <Text
-                      style={[
-                        styles.actionItemTitle,
-                        styles.actionItemDangerText,
-                        { fontSize: scale(17) },
-                      ]}
-                    >
-                      삭제하기
-                    </Text>
-                    <Text style={[styles.actionItemDesc, { fontSize: scale(13) }]}>
-                      {actionCard?.isFinal
-                        ? '그날 일기 전체가 사라져요'
-                        : '되돌릴 수 없어요'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionItem, styles.actionItemCancel]}
-                  activeOpacity={0.7}
-                  onPress={closeActionSheet}
-                >
                   <Text
                     style={[
                       styles.actionItemTitle,
-                      styles.actionItemCancelText,
-                      { fontSize: scale(16) },
+                      styles.actionItemDangerText,
+                      { fontSize: scale(14) },
                     ]}
                   >
-                    취소
+                    삭제
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -535,6 +608,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 32,
   },
+  entryCount: {
+    color: '#8A857F',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
   entryCard: {
     backgroundColor: '#FFFFFF',
     padding: 18,
@@ -575,9 +653,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
+  segmentBadge: {
+    backgroundColor: '#EFEAE3',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  segmentBadgeText: {
+    color: '#3D3A37',
+    fontWeight: '600',
+  },
   entryContent: {
     color: '#3D3A37',
     lineHeight: 22,
+  },
+  cardPhotoStrip: {
+    marginBottom: 10,
+  },
+  cardPhotoStripContent: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  cardPhotoThumb: {
+    width: 88,
+    height: 88,
+    borderRadius: 10,
+    backgroundColor: '#EFEAE3',
   },
   emptyCard: {
     paddingVertical: 60,
@@ -654,56 +755,55 @@ const styles = StyleSheet.create({
     color: '#2C2A28',
     lineHeight: 26,
   },
+  carouselWrap: {
+    marginBottom: 18,
+    marginHorizontal: -20, // viewerScrollContent 좌우 padding 상쇄해서 화면 가득 차게
+  },
+  carouselImage: {
+    width: SCREEN_WIDTH,
+    height: 240,
+    backgroundColor: '#EFEAE3',
+  },
+  carouselHint: {
+    marginTop: 8,
+    color: '#A09B95',
+    textAlign: 'center',
+  },
   viewerFooter: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: '#EFEAE3',
     backgroundColor: '#FAF8F5',
   },
   actionItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 10,
-    gap: 14,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 6,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  actionItemDanger: {},
-  actionItemCancel: {
-    backgroundColor: '#F2EEE8',
-    justifyContent: 'center',
-    marginBottom: 0,
-  },
   actionItemEmoji: {
-    fontSize: 28,
-  },
-  actionItemTextWrap: {
-    flex: 1,
+    fontSize: 16,
   },
   actionItemTitle: {
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#2C2A28',
-    marginBottom: 2,
   },
   actionItemDangerText: {
     color: '#D9534F',
-  },
-  actionItemCancelText: {
-    textAlign: 'center',
-    color: '#3D3A37',
-    fontWeight: '600',
-    marginBottom: 0,
-  },
-  actionItemDesc: {
-    color: '#8A857F',
   },
 
   // 인라인 수정 모달

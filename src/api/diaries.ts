@@ -111,6 +111,23 @@ export const deleteDiary = async (diaryId: number): Promise<void> => {
 };
 
 /**
+ * 마무리(final) 일기만 삭제 — 그날의 segments는 유지.
+ * status=IN_PROGRESS로 되돌리고 finalMood/finalContent/aiDraft를 모두 null로 reset.
+ */
+export const deleteFinalDiary = async (
+  diaryId: number,
+): Promise<DiaryResponse> => {
+  try {
+    const { data } = await apiClient.delete<DiaryResponse>(
+      `/diaries/${diaryId}/final`,
+    );
+    return data;
+  } catch (e) {
+    throw new Error(extractApiErrorMessage(e, '마무리 일기를 삭제하지 못했습니다.'));
+  }
+};
+
+/**
  * 마무리(final) 일기에 대한 AI 종합 초안 생성/재생성.
  * 응답으로 aiDraft가 채워진 DiaryResponse가 온다.
  * 백엔드가 user 정보를 읽어 시스템 프롬프트에 호칭/나이대를 자동 주입.
