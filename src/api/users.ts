@@ -16,6 +16,8 @@ export interface UserProfile {
   isKakaoUser: boolean;
   /** ISO-8601 OffsetDateTime — 가입일시 */
   createdAt: string;
+  /** 손주 얼굴 사진 url(/uploads/...) — 미설정이면 null. */
+  grandchildPhotoUrl: string | null;
 }
 
 export interface UpdateProfileRequest {
@@ -26,6 +28,8 @@ export interface UpdateProfileRequest {
   address?: string;
   emergencyContact?: string;
   isReportShared?: boolean;
+  /** 빈 문자열로 보내면 백엔드에서 null로 초기화 처리됨. */
+  grandchildPhotoUrl?: string;
 }
 
 /**

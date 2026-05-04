@@ -128,6 +128,14 @@ const SettingsScreen: React.FC = () => {
             <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>글씨 크기</Text>
             <Text style={styles.actionArrow}>›</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => navigation.navigate('GrandchildPhoto')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>손주 얼굴 설정</Text>
+            <Text style={styles.actionArrow}>›</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 기타 섹션 */}
