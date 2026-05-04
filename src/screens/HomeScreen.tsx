@@ -14,7 +14,10 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
 import type { HomeScreenProps } from '../navigation/AppNavigator';
-import { getTodayDiaries, type DiaryEntry } from '../storage/diaryStorage';
+import { createTodayDiary, type DiaryResponse } from '../api/diaries';
+import { getSegments, type SegmentResponse } from '../api/segments';
+import { MOOD_INFO } from '../constants/moods';
+import { moodServerToKey } from '../utils/moodMapper';
 import {
   resolveNickname,
   EMPTY_DAY_GREETING,
@@ -37,7 +40,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
   const { userGender, userNickname } = useAuth();
 
-  const [todayEntries, setTodayEntries] = useState<DiaryEntry[]>([]);
+  const [diary, setDiary] = useState<DiaryResponse | null>(null);
+  const [segments, setSegments] = useState<SegmentResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useFocusEffect(
@@ -46,8 +50,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       (async () => {
         setIsLoading(true);
         try {
-          const list = await getTodayDiaries();
-          if (!cancelled) setTodayEntries(list);
+          // 오늘 일기 확보(idempotent) → 그날 segments 조회.
+          const d = await createTodayDiary();
+          if (cancelled) return;
+          setDiary(d);
+          const segs = await getSegments(d.diaryId);
+          if (!cancelled) setSegments(segs);
+        } catch (e) {
+          // 네트워크/인증 실패 등 — 빈 상태로 두면 케이스 A로 표시됨.
+          if (!cancelled) {
+            setDiary(null);
+            setSegments([]);
+          }
         } finally {
           if (!cancelled) setIsLoading(false);
         }
@@ -63,15 +77,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     [userNickname, userGender],
   );
 
-  const finalEntry = useMemo(
-    () => todayEntries.find(e => e.isFinal) ?? null,
-    [todayEntries],
-  );
-
-  const latestNormal = useMemo(
-    () => todayEntries.find(e => !e.isFinal) ?? null,
-    [todayEntries],
-  );
+  const isFinalDone = diary?.status === 'COMPLETED';
+  // segments는 stepOrder 오름차순. 가장 최근에 작성한 게 마지막 원소.
+  const latestSegment = segments.length > 0 ? segments[segments.length - 1] : null;
 
   const handleWriteNormal = () => navigation.navigate('MidDiary');
   const handleWriteFinal = () => navigation.navigate('FinalDiary');
@@ -83,28 +91,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   type CaseData = { emoji: string; bubbleText: string };
 
   const caseData = useMemo<CaseData>(() => {
-    if (finalEntry) {
+    // (C) 마무리 완료 — finalMood 이모지 + 마무리 멘트
+    if (isFinalDone) {
+      const moodType = diary?.finalMood ?? null;
       return {
-        emoji: finalEntry.mood?.emoji ?? '🌙',
+        emoji: moodType ? MOOD_INFO[moodType].emoji : '🌙',
         bubbleText: `${nickname}, ${FINAL_DONE_GREETING}`,
       };
     }
-    if (latestNormal) {
-      const moodKey = latestNormal.mood?.key;
+    // (B) 일반 일기 ≥ 1 — 가장 최근 segment의 mood 이모지 + 기분별 멘트
+    if (latestSegment) {
+      const frontKey = moodServerToKey(latestSegment.moodSnapshot);
       const greetingText =
-        (moodKey && MOOD_GREETING_TEXT[moodKey]) ||
-        DEFAULT_AFTER_DIARY_GREETING;
+        MOOD_GREETING_TEXT[frontKey] || DEFAULT_AFTER_DIARY_GREETING;
       return {
-        emoji: latestNormal.mood?.emoji ?? '🙂',
+        emoji: MOOD_INFO[latestSegment.moodSnapshot].emoji,
         bubbleText: `${nickname}, ${greetingText}`,
       };
     }
-    // 케이스 A — 손주 표정 (성별에 맞춰 다정한 인사 표정)
+    // (A) 빈 상태 — 손주 표정
     return {
       emoji: userGender === 'MALE' ? '🧒' : '👧',
       bubbleText: `${nickname}, ${EMPTY_DAY_GREETING}`,
     };
-  }, [finalEntry, latestNormal, nickname, userGender]);
+  }, [isFinalDone, diary, latestSegment, nickname, userGender]);
 
   // ───────────────────────────────────────
   // 푸터 (버튼 영역 — 하단 고정)
@@ -112,7 +122,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const renderFooter = () => {
     // 마무리 후 — 추가 일기만
-    if (finalEntry) {
+    if (isFinalDone) {
       return (
         <View style={styles.footer}>
           <TouchableOpacity
@@ -128,7 +138,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       );
     }
     // 일반 일기 있음 — 추가 + 마무리
-    if (latestNormal) {
+    if (latestSegment) {
       return (
         <View style={styles.footer}>
           <TouchableOpacity

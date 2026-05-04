@@ -16,21 +16,19 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useFocusEffect } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import {
-  getAllDiaries,
+  getDiariesByMonth,
   updateDiary,
   deleteDiary,
-  type DiaryEntry,
-} from '../storage/diaryStorage';
+  type DiaryResponse,
+} from '../api/diaries';
+import {
+  getSegments,
+  updateSegment,
+  deleteSegment,
+  type SegmentResponse,
+} from '../api/segments';
+import { MOOD_INFO } from '../constants/moods';
 import type { DateDetailScreenProps } from '../navigation/AppNavigator';
-
-/** ISO 문자열 → 'YYYY-MM-DD' (로컬 타임존 기준). */
-const toDateKey = (iso: string): string => {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 const formatKoreanDate = (dateStr: string): string => {
   if (!dateStr) return '';
@@ -47,6 +45,37 @@ const formatTime = (iso: string): string => {
   return `${h}:${m}`;
 };
 
+/**
+ * 그날의 일기 카드들을 segment / final 구분 없이 통합한 ViewModel.
+ * `kind`로 백엔드 호출(수정/삭제)을 분기한다.
+ */
+type CardItem =
+  | {
+      kind: 'segment';
+      key: string;
+      segment: SegmentResponse;
+      moodEmoji: string;
+      content: string;
+      time: string;
+      isFinal: false;
+    }
+  | {
+      kind: 'final';
+      key: string;
+      diary: DiaryResponse;
+      moodEmoji: string;
+      content: string;
+      time: string;
+      isFinal: true;
+    };
+
+/** 표시 규칙: isEdited면 사용자 본문, 아니면 AI 초안. */
+const segmentBody = (s: SegmentResponse): string =>
+  (s.isEdited ? s.userContent : s.aiDraft) ?? '';
+
+const diaryBody = (d: DiaryResponse): string =>
+  (d.isEdited ? d.finalContent : d.aiDraft) ?? '';
+
 const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
   route,
   navigation,
@@ -54,18 +83,28 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
   const { scale } = useSettings();
   const { date } = route.params;
 
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [diary, setDiary] = useState<DiaryResponse | null>(null);
+  const [segments, setSegments] = useState<SegmentResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // 카드 탭 시 본문 보기 + 액션 (수정/삭제)
-  const [actionSheetEntry, setActionSheetEntry] = useState<DiaryEntry | null>(null);
+
+  // 카드 탭 시 본문 보기 + 액션 모달
+  const [actionCard, setActionCard] = useState<CardItem | null>(null);
   // 인라인 수정 모달
-  const [editingEntry, setEditingEntry] = useState<DiaryEntry | null>(null);
+  const [editingCard, setEditingCard] = useState<CardItem | null>(null);
   const [editText, setEditText] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const reloadEntries = useCallback(async () => {
-    const all = await getAllDiaries();
-    setEntries(all.filter(e => toDateKey(e.createdAt) === date));
+  const reload = useCallback(async () => {
+    const ym = date.slice(0, 7);
+    const list = await getDiariesByMonth(ym);
+    const target = list.find(d => d.targetDate === date) ?? null;
+    setDiary(target);
+    if (target) {
+      const segs = await getSegments(target.diaryId);
+      setSegments(segs);
+    } else {
+      setSegments([]);
+    }
   }, [date]);
 
   useFocusEffect(
@@ -74,9 +113,11 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
       (async () => {
         setIsLoading(true);
         try {
-          const all = await getAllDiaries();
+          await reload();
+        } catch (e) {
           if (!cancelled) {
-            setEntries(all.filter(e => toDateKey(e.createdAt) === date));
+            setDiary(null);
+            setSegments([]);
           }
         } finally {
           if (!cancelled) setIsLoading(false);
@@ -85,54 +126,87 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
       return () => {
         cancelled = true;
       };
-    }, [date]),
+    }, [reload]),
   );
 
-  const handleEntryPress = (entry: DiaryEntry) => {
-    setActionSheetEntry(entry);
-  };
+  // 카드 리스트 — segment N개 + (final 완료된 경우) 마무리 카드 1개.
+  // 정렬: createdAt(final은 updatedAt) 내림차순 — 가장 최근 일기가 맨 위.
+  // final 작성 후 추가 segment가 있으면 그 추가 segment가 final보다 위에 올 수도 있음.
+  const cards: CardItem[] = [
+    ...segments.map<CardItem>(s => ({
+      kind: 'segment',
+      key: `seg-${s.segmentId}`,
+      segment: s,
+      moodEmoji: MOOD_INFO[s.moodSnapshot].emoji,
+      content: segmentBody(s),
+      time: formatTime(s.createdAt),
+      isFinal: false,
+    })),
+    ...(diary && diary.status === 'COMPLETED'
+      ? [
+          {
+            kind: 'final' as const,
+            key: `final-${diary.diaryId}`,
+            diary,
+            moodEmoji: diary.finalMood ? MOOD_INFO[diary.finalMood].emoji : '🌙',
+            content: diaryBody(diary),
+            time: formatTime(diary.updatedAt),
+            isFinal: true as const,
+          },
+        ]
+      : []),
+  ].sort((a, b) => {
+    const ta = a.kind === 'segment' ? a.segment.createdAt : a.diary.updatedAt;
+    const tb = b.kind === 'segment' ? b.segment.createdAt : b.diary.updatedAt;
+    return tb.localeCompare(ta);
+  });
 
-  const closeActionSheet = () => setActionSheetEntry(null);
+  const handleEntryPress = (card: CardItem) => setActionCard(card);
+  const closeActionSheet = () => setActionCard(null);
 
   const handlePickEdit = () => {
-    const entry = actionSheetEntry;
-    if (!entry) return;
+    const card = actionCard;
+    if (!card) return;
     closeActionSheet();
-    setEditingEntry(entry);
-    setEditText(entry.content);
+    setEditingCard(card);
+    setEditText(card.content);
   };
 
   const handlePickDelete = () => {
-    const entry = actionSheetEntry;
-    if (!entry) return;
+    const card = actionCard;
+    if (!card) return;
     closeActionSheet();
-    Alert.alert(
-      '일기를 삭제할까요?',
-      '한 번 삭제한 일기는 다시 되돌릴 수 없어요.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDiary(entry.id);
-              await reloadEntries();
-            } catch (e: any) {
-              Alert.alert(
-                '삭제 실패',
-                e?.message ?? '알 수 없는 오류가 발생했어요.',
-              );
+    const message =
+      card.kind === 'final'
+        ? '마무리 일기를 삭제하면 그날의 모든 기록이 함께 사라져요.'
+        : '한 번 삭제한 일기는 다시 되돌릴 수 없어요.';
+    Alert.alert('일기를 삭제할까요?', message, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            if (card.kind === 'segment') {
+              if (!diary) throw new Error('일기를 찾을 수 없어요.');
+              await deleteSegment(diary.diaryId, card.segment.segmentId);
+            } else {
+              await deleteDiary(card.diary.diaryId);
             }
-          },
+            await reload();
+          } catch (e: any) {
+            Alert.alert(
+              '삭제 실패',
+              e?.message ?? '알 수 없는 오류가 발생했어요.',
+            );
+          }
         },
-      ],
-      { cancelable: true },
-    );
+      },
+    ]);
   };
 
   const handleSaveEdit = async () => {
-    if (!editingEntry) return;
+    if (!editingCard) return;
     const trimmed = editText.trim();
     if (!trimmed) {
       Alert.alert('내용이 비어있어요', '한 줄이라도 작성해주세요.');
@@ -140,9 +214,18 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
     }
     setIsSavingEdit(true);
     try {
-      await updateDiary(editingEntry.id, { content: trimmed });
-      await reloadEntries();
-      setEditingEntry(null);
+      if (editingCard.kind === 'segment') {
+        if (!diary) throw new Error('일기를 찾을 수 없어요.');
+        await updateSegment(diary.diaryId, editingCard.segment.segmentId, {
+          userContent: trimmed,
+        });
+      } else {
+        await updateDiary(editingCard.diary.diaryId, {
+          finalContent: trimmed,
+        });
+      }
+      await reload();
+      setEditingCard(null);
       setEditText('');
     } catch (e: any) {
       Alert.alert('수정 실패', e?.message ?? '알 수 없는 오류가 발생했어요.');
@@ -152,13 +235,12 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
   };
 
   const handleCancelEdit = () => {
-    setEditingEntry(null);
+    setEditingCard(null);
     setEditText('');
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* 헤더 — 뒤로가기 + 날짜 */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -184,22 +266,20 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {entries.length > 0 ? (
-            entries.map(entry => (
+          {cards.length > 0 ? (
+            cards.map(card => (
               <TouchableOpacity
-                key={entry.id}
+                key={card.key}
                 style={[
                   styles.entryCard,
-                  entry.isFinal && styles.entryCardFinal,
+                  card.isFinal && styles.entryCardFinal,
                 ]}
                 activeOpacity={0.7}
-                onPress={() => handleEntryPress(entry)}
+                onPress={() => handleEntryPress(card)}
               >
                 <View style={styles.entryHeader}>
-                  {entry.mood && (
-                    <Text style={styles.entryMood}>{entry.mood.emoji}</Text>
-                  )}
-                  {entry.isFinal && (
+                  <Text style={styles.entryMood}>{card.moodEmoji}</Text>
+                  {card.isFinal && (
                     <View style={styles.finalBadge}>
                       <Text
                         style={[styles.finalBadgeText, { fontSize: scale(11) }]}
@@ -209,14 +289,14 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                     </View>
                   )}
                   <Text style={[styles.entryTime, { fontSize: scale(13) }]}>
-                    {formatTime(entry.createdAt)}
+                    {card.time}
                   </Text>
                 </View>
                 <Text
                   style={[styles.entryContent, { fontSize: scale(14) }]}
                   numberOfLines={3}
                 >
-                  {entry.content}
+                  {card.content}
                 </Text>
               </TouchableOpacity>
             ))
@@ -233,7 +313,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
 
       {/* 카드 탭 — 일기 전체보기 + 수정/삭제/취소 */}
       <Modal
-        visible={actionSheetEntry !== null}
+        visible={actionCard !== null}
         transparent
         animationType="slide"
         onRequestClose={closeActionSheet}
@@ -248,9 +328,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
             <SafeAreaView edges={['bottom']} style={styles.viewerSafe}>
               <View style={styles.viewerHeader}>
                 <Text style={[styles.viewerHeaderTitle, { fontSize: scale(15) }]}>
-                  {actionSheetEntry
-                    ? formatKoreanDate(toDateKey(actionSheetEntry.createdAt))
-                    : ''}
+                  {formatKoreanDate(date)}
                 </Text>
                 <TouchableOpacity
                   onPress={closeActionSheet}
@@ -266,12 +344,10 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.viewerMetaRow}>
-                  {actionSheetEntry?.mood && (
-                    <Text style={styles.viewerMood}>
-                      {actionSheetEntry.mood.emoji}
-                    </Text>
-                  )}
-                  {actionSheetEntry?.isFinal && (
+                  <Text style={styles.viewerMood}>
+                    {actionCard?.moodEmoji}
+                  </Text>
+                  {actionCard?.isFinal && (
                     <View style={styles.finalBadge}>
                       <Text
                         style={[styles.finalBadgeText, { fontSize: scale(11) }]}
@@ -280,14 +356,12 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                       </Text>
                     </View>
                   )}
-                  {actionSheetEntry && (
-                    <Text style={[styles.viewerTime, { fontSize: scale(13) }]}>
-                      {formatTime(actionSheetEntry.createdAt)}
-                    </Text>
-                  )}
+                  <Text style={[styles.viewerTime, { fontSize: scale(13) }]}>
+                    {actionCard?.time}
+                  </Text>
                 </View>
                 <Text style={[styles.viewerContent, { fontSize: scale(15) }]}>
-                  {actionSheetEntry?.content ?? ''}
+                  {actionCard?.content ?? ''}
                 </Text>
               </ScrollView>
 
@@ -325,7 +399,9 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                       삭제하기
                     </Text>
                     <Text style={[styles.actionItemDesc, { fontSize: scale(13) }]}>
-                      되돌릴 수 없어요
+                      {actionCard?.isFinal
+                        ? '그날 일기 전체가 사라져요'
+                        : '되돌릴 수 없어요'}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -353,7 +429,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
 
       {/* 일기 인라인 수정 모달 */}
       <Modal
-        visible={editingEntry !== null}
+        visible={editingCard !== null}
         animationType="slide"
         transparent
         onRequestClose={handleCancelEdit}

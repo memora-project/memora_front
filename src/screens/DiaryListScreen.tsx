@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useSettings } from '../contexts/SettingsContext';
-import { getAllDiaries, type DiaryEntry } from '../storage/diaryStorage';
+import { getDiariesByMonth, type DiaryResponse } from '../api/diaries';
 import YearMonthPicker from '../components/YearMonthPicker';
 import type { DiaryListMainScreenProps } from '../navigation/AppNavigator';
 
@@ -28,15 +28,6 @@ type MarkedDateInfo = {
   dotColor?: string;
 };
 
-/** ISO 문자열 → 'YYYY-MM-DD' (로컬 타임존). */
-const toDateKey = (iso: string): string => {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 const formatYearMonth = (dateStr: string): string => {
   if (!dateStr) return '';
   const [year, month] = dateStr.split('-');
@@ -45,21 +36,25 @@ const formatYearMonth = (dateStr: string): string => {
 
 const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [diaries, setDiaries] = useState<DiaryResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState<string>(() =>
     new Date().toISOString().slice(0, 10),
   );
   const [yearMonthPickerVisible, setYearMonthPickerVisible] = useState(false);
 
+  // currentMonth가 바뀌거나 화면 focus되면 그 달치 일기 fetch.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         setIsLoading(true);
         try {
-          const list = await getAllDiaries();
-          if (!cancelled) setEntries(list);
+          const ym = currentMonth.slice(0, 7); // 'YYYY-MM'
+          const list = await getDiariesByMonth(ym);
+          if (!cancelled) setDiaries(list);
+        } catch (e) {
+          if (!cancelled) setDiaries([]);
         } finally {
           if (!cancelled) setIsLoading(false);
         }
@@ -67,20 +62,20 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [currentMonth]),
   );
 
   const markedDates = useMemo(() => {
     const map: Record<string, MarkedDateInfo> = {};
-    entries.forEach(entry => {
-      const dateKey = toDateKey(entry.createdAt);
-      map[dateKey] = {
+    diaries.forEach(d => {
+      // targetDate는 이미 'YYYY-MM-DD' 형식이라 추가 변환 불필요.
+      map[d.targetDate] = {
         marked: true,
         dotColor: '#2C2A28',
       };
     });
     return map;
-  }, [entries]);
+  }, [diaries]);
 
   const goToPrevMonth = () => {
     const [y, m] = currentMonth.split('-').map(Number);
