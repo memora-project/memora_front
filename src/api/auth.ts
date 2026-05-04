@@ -54,3 +54,27 @@ export const signup = async (request: SignupRequest): Promise<AuthTokens> => {
     throw new Error(extractApiErrorMessage(e, '회원가입에 실패했습니다.'));
   }
 };
+
+export interface KakaoLoginRequest {
+  /** 카카오 OAuth 인가코드 — WebView가 redirect URI에서 가로챈 ?code= 값. */
+  code: string;
+  /** 카카오 콘솔에 등록된 redirect URI (백엔드가 토큰 교환 시 동일값으로 검증). */
+  redirectUri: string;
+}
+
+/**
+ * POST /auth/kakao — 카카오 로그인.
+ * 백엔드가 인가코드로 카카오 토큰 교환 + 사용자 정보 조회 + (없으면) 자동 회원가입까지 처리.
+ *
+ * 카카오 가입자는 우리 서비스의 password=null이라 일반 로그인 불가 → 항상 카카오 로그인으로 들어옴.
+ */
+export const kakaoLogin = async (
+  request: KakaoLoginRequest,
+): Promise<AuthTokens> => {
+  try {
+    const { data } = await apiClient.post<AuthTokens>('/auth/kakao', request);
+    return data;
+  } catch (e) {
+    throw new Error(extractApiErrorMessage(e, '카카오 로그인에 실패했습니다.'));
+  }
+};

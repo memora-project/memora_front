@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { HomeScreenProps } from '../navigation/AppNavigator';
 import { createTodayDiary, type DiaryResponse } from '../api/diaries';
 import { getSegments, type SegmentResponse } from '../api/segments';
+import { resolveImageUrl } from '../api/files';
 import { MOOD_INFO } from '../constants/moods';
 import { moodServerToKey } from '../utils/moodMapper';
 import {
@@ -38,7 +40,7 @@ import {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
-  const { userGender, userNickname } = useAuth();
+  const { userGender, userNickname, userGrandchildPhotoUrl } = useAuth();
 
   const [diary, setDiary] = useState<DiaryResponse | null>(null);
   const [segments, setSegments] = useState<SegmentResponse[]>([]);
@@ -88,15 +90,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // 케이스별 데이터 계산
   // ───────────────────────────────────────
 
-  type CaseData = { emoji: string; bubbleText: string };
+  type CaseData = {
+    emoji: string;
+    bubbleText: string;
+    /**
+     * 손주 사진이 설정돼 있으면 모든 케이스에서 채움 — 일기 작성 후에도 손주 얼굴 유지.
+     * 사진 미설정 시에만 케이스별 이모지(케이스 A: 손주 표정, B/C: mood)가 표시된다.
+     */
+    photoUrl?: string | null;
+  };
 
   const caseData = useMemo<CaseData>(() => {
+    const photoUrl = userGrandchildPhotoUrl ?? null;
+
     // (C) 마무리 완료 — finalMood 이모지 + 마무리 멘트
     if (isFinalDone) {
       const moodType = diary?.finalMood ?? null;
       return {
         emoji: moodType ? MOOD_INFO[moodType].emoji : '🌙',
         bubbleText: `${nickname}, ${FINAL_DONE_GREETING}`,
+        photoUrl,
       };
     }
     // (B) 일반 일기 ≥ 1 — 가장 최근 segment의 mood 이모지 + 기분별 멘트
@@ -107,14 +120,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       return {
         emoji: MOOD_INFO[latestSegment.moodSnapshot].emoji,
         bubbleText: `${nickname}, ${greetingText}`,
+        photoUrl,
       };
     }
-    // (A) 빈 상태 — 손주 표정
+    // (A) 빈 상태 — 손주 표정 (사진 없을 때만 보이는 이모지)
     return {
       emoji: userGender === 'MALE' ? '🧒' : '👧',
       bubbleText: `${nickname}, ${EMPTY_DAY_GREETING}`,
+      photoUrl,
     };
-  }, [isFinalDone, diary, latestSegment, nickname, userGender]);
+  }, [isFinalDone, diary, latestSegment, nickname, userGender, userGrandchildPhotoUrl]);
 
   // ───────────────────────────────────────
   // 푸터 (버튼 영역 — 하단 고정)
@@ -190,7 +205,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       ) : (
         <>
           <View style={styles.content}>
-            <Text style={styles.bigEmoji}>{caseData.emoji}</Text>
+            {caseData.photoUrl ? (
+              <Image
+                source={{ uri: resolveImageUrl(caseData.photoUrl) }}
+                style={styles.bigPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.bigEmoji}>{caseData.emoji}</Text>
+            )}
 
             {/* 말풍선 — 이모지에서 말이 나오는 듯 위쪽에 삼각형 꼬리 */}
             <View style={styles.bubbleTail} />
@@ -229,6 +252,13 @@ const styles = StyleSheet.create({
   bigEmoji: {
     fontSize: 130,
     marginBottom: 12,
+  },
+  bigPhoto: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    marginBottom: 12,
+    backgroundColor: '#EFEAE3',
   },
 
   // 말풍선 꼬리 — 위로 향한 작은 삼각형 (이모지 쪽).
