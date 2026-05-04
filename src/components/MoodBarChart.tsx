@@ -29,12 +29,9 @@ const MoodBarChart: React.FC<Props> = ({ data }) => {
 
         return (
           <View key={item.type} style={styles.row}>
-            {/* 왼쪽: 이모지 + 라벨 */}
+            {/* 왼쪽: 이모지만 */}
             <View style={styles.labelArea}>
               <Text style={styles.emoji}>{info.emoji}</Text>
-              <Text style={[styles.label, { fontSize: scale(13) }]} numberOfLines={1}>
-                {info.label}
-              </Text>
             </View>
 
             {/* 가운데: 막대 */}
@@ -79,18 +76,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   labelArea: {
-    flexDirection: 'row',
     alignItems: 'center',
-    width: 110,
-    gap: 6,
+    justifyContent: 'center',
+    width: 36,
   },
   emoji: {
     fontSize: 22,
-  },
-  label: {
-    color: '#3D3A37',
-    fontWeight: '500',
-    flex: 1,
   },
   barTrack: {
     flex: 1,

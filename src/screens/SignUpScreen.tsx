@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import Icon from 'react-native-vector-icons/Ionicons';
 import DistrictPicker from '../components/DistrictPicker';
 import BirthdatePicker from '../components/BirthdatePicker';
 import type { District } from '../constants/districts';
@@ -35,6 +36,8 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   // isReportShared: 명세상 signup body에 없음 → 추후 PATCH /users/me로 별도 저장 예정
   const [isReportShared, setIsReportShared] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
   const handleSignUp = async () => {
     if (isLoading) return;
@@ -99,8 +102,8 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       };
 
       const tokens = await apiSignup(request);
-      // 자동 로그인 — AuthContext.login이 토큰을 저장하고 isLoggedIn=true로 만들면
-      // AppNavigator가 메인 탭으로 자동 전환됨
+      // 자동 로그인 — AuthContext.login이 /users/me 호출하여 createdAt 포함한
+      // 프로필 전체를 AsyncStorage + state로 채워 넣음.
       await authLogin(trimmedEmail, tokens.accessToken, tokens.refreshToken);
     } catch (error: unknown) {
       const message =
@@ -139,8 +142,9 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.backTouch}
         >
-          <Text style={styles.backBtn}>←</Text>
+          <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>회원가입</Text>
         <View style={styles.headerSpacer} />
@@ -193,15 +197,29 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             비밀번호 <Text style={styles.required}>*</Text>
           </Text>
-          <TextInput
-            style={[styles.input, { fontSize: scale(17) }]}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="6자 이상"
-            placeholderTextColor="#B5AFA8"
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.passwordWrap}>
+            <TextInput
+              style={[styles.input, styles.passwordInput, { fontSize: scale(17) }]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="6자 이상"
+              placeholderTextColor="#B5AFA8"
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPassword(v => !v)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.6}
+            >
+              <Icon
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color="#8A857F"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 비밀번호 확인 */}
@@ -209,15 +227,29 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
             비밀번호 확인 <Text style={styles.required}>*</Text>
           </Text>
-          <TextInput
-            style={[styles.input, { fontSize: scale(17) }]}
-            value={passwordConfirm}
-            onChangeText={setPasswordConfirm}
-            placeholder="비밀번호 한 번 더 입력"
-            placeholderTextColor="#B5AFA8"
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.passwordWrap}>
+            <TextInput
+              style={[styles.input, styles.passwordInput, { fontSize: scale(17) }]}
+              value={passwordConfirm}
+              onChangeText={setPasswordConfirm}
+              placeholder="비밀번호 한 번 더 입력"
+              placeholderTextColor="#B5AFA8"
+              secureTextEntry={!showPasswordConfirm}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPasswordConfirm(v => !v)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.6}
+            >
+              <Icon
+                name={showPasswordConfirm ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color="#8A857F"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 전화번호 */}
@@ -336,11 +368,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
   },
-  backBtn: {
-    fontSize: 28,
-    color: '#2C2A28',
+  backTouch: {
     width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtn: {
+    fontSize: 30,
+    color: '#2C2A28',
     fontWeight: '300',
+    lineHeight: 32,
   },
   headerTitle: {
     fontWeight: '700',
@@ -375,6 +413,21 @@ const styles = StyleSheet.create({
     color: '#2C2A28',
     minHeight: 52,
     textAlignVertical: 'center',
+  },
+  passwordWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    height: '100%',
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   helperText: {
     marginTop: 6,
