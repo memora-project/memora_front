@@ -13,12 +13,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 import type { FinalDiaryScreenProps } from '../navigation/AppNavigator';
-import { generateFinalAIDraft } from '../api/openrouter';
 import {
-  getTodayDiaries,
-  getTodayFinalDiary,
-  saveDiary,
-} from '../storage/diaryStorage';
+  createTodayDiary,
+  generateFinalAiDraft,
+  updateDiary,
+  completeDiary,
+} from '../api/diaries';
+import { moodKeyToServer } from '../utils/moodMapper';
 import { useSettings } from '../contexts/SettingsContext';
 
 type Step = 1 | 2;
@@ -47,21 +48,36 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const [step, setStep] = useState<Step>(1);
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [diaryText, setDiaryText] = useState('');
+  const [originalAiDraft, setOriginalAiDraft] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editMenuVisible, setEditMenuVisible] = useState(false);
+  const [diaryId, setDiaryId] = useState<number | null>(null);
 
-  // 진입 시 — 이미 오늘 최종 일기가 있으면 안내하고 닫기.
+  // 진입 시 — 오늘 일기 확보(idempotent). 이미 COMPLETED면 안내하고 닫기.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const existing = await getTodayFinalDiary();
-      if (!cancelled && existing) {
-        Alert.alert(
-          '오늘은 이미 마무리하셨어요',
-          '하루에 하나의 최종 일기만 작성할 수 있어요.',
-          [{ text: '확인', onPress: () => navigation.goBack() }],
-        );
+      try {
+        const diary = await createTodayDiary();
+        if (cancelled) return;
+        if (diary.status === 'COMPLETED') {
+          Alert.alert(
+            '오늘은 이미 마무리하셨어요',
+            '하루에 하나의 최종 일기만 작성할 수 있어요.',
+            [{ text: '확인', onPress: () => navigation.goBack() }],
+          );
+          return;
+        }
+        setDiaryId(diary.diaryId);
+      } catch (e: any) {
+        if (!cancelled) {
+          Alert.alert(
+            '오늘 일기를 시작하지 못했어요',
+            e?.message ?? '잠시 후 다시 시도해주세요.',
+            [{ text: '확인', onPress: () => navigation.goBack() }],
+          );
+        }
       }
     })();
     return () => {
@@ -69,26 +85,21 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
     };
   }, [navigation]);
 
-  // step 2 진입 — 오늘 일반 일기들을 종합해 AI 초안 생성.
+  // step 2 진입 — 백엔드의 generateFinalAiDraft가 그날 segments를 종합해 본문 생성.
+  // 호칭 personalize는 서버가 user 정보로 자동 적용.
   useEffect(() => {
-    if (step !== 2 || diaryText) return;
+    if (step !== 2 || diaryText || diaryId === null) return;
 
     let cancelled = false;
     (async () => {
       setIsGenerating(true);
       try {
-        const today = await getTodayDiaries();
-        // 일반 일기만, 시간순 (이른 → 늦은) 정렬해서 AI에 전달.
-        const snippets = today
-          .filter(e => !e.isFinal)
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-          .map(e => e.content);
-
-        const draft = await generateFinalAIDraft({
-          moodLabel: selectedMood?.label ?? null,
-          diarySnippets: snippets,
-        });
-        if (!cancelled) setDiaryText(draft);
+        const diary = await generateFinalAiDraft(diaryId);
+        const draft = diary.aiDraft ?? '';
+        if (!cancelled) {
+          setDiaryText(draft);
+          setOriginalAiDraft(draft);
+        }
       } catch (e: any) {
         console.warn('최종 일기 AI 생성 실패:', e);
         if (!cancelled) {
@@ -97,6 +108,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
             `${e?.message ?? '알 수 없는 오류'}\n\n직접 작성해주세요.`,
           );
           setDiaryText('');
+          setOriginalAiDraft('');
         }
       } finally {
         if (!cancelled) setIsGenerating(false);
@@ -106,7 +118,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
     return () => {
       cancelled = true;
     };
-  }, [step, diaryText, selectedMood]);
+  }, [step, diaryText, diaryId]);
 
   const handleBack = () => {
     if (step === 1) {
@@ -127,29 +139,21 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
       Alert.alert('내용이 비어있어요', '한 줄이라도 작성한 뒤 저장해주세요.');
       return;
     }
+    if (diaryId === null) {
+      Alert.alert('아직 저장 준비가 안 됐어요', '잠시만 기다려주세요.');
+      return;
+    }
     setIsSaving(true);
     try {
-      // 한 번 더 가드 — 다른 디바이스/세션에서 이미 작성됐을 수 있음.
-      const existing = await getTodayFinalDiary();
-      if (existing) {
-        Alert.alert(
-          '이미 마무리되었어요',
-          '오늘의 최종 일기는 이미 작성되었어요.',
-          [{ text: '확인', onPress: () => navigation.goBack() }],
-        );
-        return;
-      }
-      await saveDiary({
-        mood: selectedMood,
-        content: trimmed,
-        photoUri: null,
-        takenAt: null,
-        latitude: null,
-        longitude: null,
-        locationLabel: '위치 정보 없음',
-        locationSource: 'none',
-        isFinal: true,
+      // 1) finalMood + finalContent 반영. 백엔드가 isEdited 플래그도 함께 처리.
+      await updateDiary(diaryId, {
+        finalMood: selectedMood
+          ? moodKeyToServer(selectedMood.key as any)
+          : undefined,
+        finalContent: trimmed,
       });
+      // 2) status를 COMPLETED로 전환. 같은 날 다시 진입하면 위 useEffect의 가드가 막음.
+      await completeDiary(diaryId);
       navigation.navigate('Home');
     } catch (e: any) {
       Alert.alert('저장 실패', e?.message ?? '알 수 없는 오류가 발생했어요.');
@@ -161,12 +165,15 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const handleRestartFromMood = () => {
     setEditMenuVisible(false);
     setDiaryText('');
+    setOriginalAiDraft('');
     setStep(1);
   };
 
   const handleRegenerateAI = () => {
     setEditMenuVisible(false);
+    // diaryText 비우면 step 2 useEffect가 generateFinalAiDraft를 다시 호출.
     setDiaryText('');
+    setOriginalAiDraft('');
   };
 
   const renderTopBar = () => (
