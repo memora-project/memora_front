@@ -1,72 +1,101 @@
 import { apiClient, extractApiErrorMessage } from './client';
-import type { MoodType } from './diaries';
+import type { MoodType } from '../constants/moods';
 
 /**
- * 백엔드 SegmentResponse와 일치. 한 일기 안의 "중간 기록" 한 건.
+ * Segment = 하루 안의 "중간 기록". MidDiaryScreen에서 작성하는 일반 일기 한 건이
+ * segment 한 건에 대응한다. 한 일기(diary) 안에 여러 segment가 stepOrder 순으로 쌓인다.
  *
- * - moodSnapshot: 그 시점 사용자가 고른 기분
- * - photoUrl: 백엔드 업로드 후 받은 URL (file:// 가 아님)
- * - takenAt/latitude/longitude/locationName: 사진 EXIF 또는 디바이스 GPS에서 추출
- * - aiDraft: 이 segment에 대한 AI 초안 (POST .../ai-draft 호출 후 채워짐)
- * - userContent: 사용자가 작성/수정한 본문
+ * 본문 표시 규칙:
+ *   isEdited === true  → userContent (사용자가 편집한 본문)
+ *   isEdited === false → aiDraft     (AI 초안 — 사용자가 OK 한 상태)
+ *
+ * userContent 필드의 의미는 시점에 따라 다르다:
+ *   - 생성 시점:  한 줄 메모 (AI 프롬프트에 들어가는 키워드)
+ *   - 편집 시점:  사용자가 다듬은 본문 (생성 시 메모를 덮어씀)
  */
+
+/** 응답에서 받는 사진 한 장의 메타. photoOrder 오름차순으로 정렬되어 옴. */
+export interface SegmentPhotoResponse {
+  photoId: number | null;
+  photoOrder: number;
+  photoUrl: string;
+  /** ISO 8601. */
+  takenAt: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string | null;
+  createdAt: string | null;
+}
+
+/** 요청에서 보내는 사진 한 장의 메타. photoUrl 필수 — /files/images로 업로드한 결과 url. */
+export interface SegmentPhotoRequest {
+  photoUrl: string;
+  /** ISO 8601 (OffsetDateTime). */
+  takenAt?: string;
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+}
+
 export interface SegmentResponse {
   segmentId: number;
   stepOrder: number;
   moodSnapshot: MoodType;
+
+  /** 첫 번째 사진의 url (호환용 mirror). 다중 사진 클라이언트는 photos 사용. */
   photoUrl: string | null;
-  takenAt: string | null; // ISO OffsetDateTime
+  /** ISO 8601. */
+  takenAt: string | null;
   latitude: number | null;
   longitude: number | null;
   locationName: string | null;
+
   aiDraft: string | null;
   userContent: string | null;
   isEdited: boolean;
   createdAt: string;
+
+  /** 첨부된 모든 사진. 비어있을 수 있음. */
+  photos: SegmentPhotoResponse[];
 }
 
 export interface SegmentCreateRequest {
   moodSnapshot: MoodType;
+  /** 다중 사진. 비어있으면 단일 photoUrl 경로로 폴백. */
+  photos?: SegmentPhotoRequest[];
+
+  // 단일 사진 호환 경로 — 새 코드는 photos 사용.
   photoUrl?: string;
-  takenAt?: string; // ISO
+  takenAt?: string;
   latitude?: number;
   longitude?: number;
   locationName?: string;
-  /**
-   * 한 줄 메모 (있으면 AI 프롬프트에 반영됨).
-   * ⚠️ 백엔드 SegmentService.createSegment()가 이 필드를 builder에 누락하는 사전 버그 있음.
-   * 다음 백엔드 PR에서 수정 예정. 우선 보내두면 그쪽 수정 후 즉시 동작.
-   */
+
+  /** 한 줄 메모. AI 초안 생성 품질에 직접 영향. */
   userContent?: string;
 }
 
 export interface SegmentUpdateRequest {
   moodSnapshot?: MoodType;
+  /** 사용자가 편집한 본문. 백엔드는 이 값으로 userContent를 덮어쓰고 isEdited=true 처리. */
   userContent?: string;
 }
 
-/**
- * POST /diaries/{diaryId}/segments — 중간 기록 추가.
- * stepOrder는 백엔드가 자동 부여 (현재 개수 + 1).
- */
 export const createSegment = async (
   diaryId: number,
-  request: SegmentCreateRequest,
+  body: SegmentCreateRequest,
 ): Promise<SegmentResponse> => {
   try {
     const { data } = await apiClient.post<SegmentResponse>(
       `/diaries/${diaryId}/segments`,
-      request,
+      body,
     );
     return data;
   } catch (e) {
-    throw new Error(extractApiErrorMessage(e, '중간 기록을 저장하지 못했어요.'));
+    throw new Error(extractApiErrorMessage(e, '중간 기록을 저장하지 못했습니다.'));
   }
 };
 
-/**
- * GET /diaries/{diaryId}/segments — 중간 기록 목록 (stepOrder 오름차순).
- */
 export const getSegments = async (
   diaryId: number,
 ): Promise<SegmentResponse[]> => {
@@ -76,34 +105,26 @@ export const getSegments = async (
     );
     return data;
   } catch (e) {
-    throw new Error(extractApiErrorMessage(e, '중간 기록을 불러오지 못했어요.'));
+    throw new Error(extractApiErrorMessage(e, '중간 기록을 불러오지 못했습니다.'));
   }
 };
 
-/**
- * PATCH /diaries/{diaryId}/segments/{segmentId} — 중간 기록 수정.
- * 사용자가 AI 초안을 다듬어 자기 표현으로 바꿀 때 호출.
- */
 export const updateSegment = async (
   diaryId: number,
   segmentId: number,
-  request: SegmentUpdateRequest,
+  body: SegmentUpdateRequest,
 ): Promise<SegmentResponse> => {
   try {
     const { data } = await apiClient.patch<SegmentResponse>(
       `/diaries/${diaryId}/segments/${segmentId}`,
-      request,
+      body,
     );
     return data;
   } catch (e) {
-    throw new Error(extractApiErrorMessage(e, '중간 기록을 수정하지 못했어요.'));
+    throw new Error(extractApiErrorMessage(e, '중간 기록을 수정하지 못했습니다.'));
   }
 };
 
-/**
- * DELETE /diaries/{diaryId}/segments/{segmentId} — 중간 기록 삭제.
- * 삭제 후 남은 segments의 stepOrder가 자동 재정렬됨.
- */
 export const deleteSegment = async (
   diaryId: number,
   segmentId: number,
@@ -111,6 +132,25 @@ export const deleteSegment = async (
   try {
     await apiClient.delete(`/diaries/${diaryId}/segments/${segmentId}`);
   } catch (e) {
-    throw new Error(extractApiErrorMessage(e, '중간 기록을 삭제하지 못했어요.'));
+    throw new Error(extractApiErrorMessage(e, '중간 기록을 삭제하지 못했습니다.'));
+  }
+};
+
+/**
+ * 단일 segment에 대한 AI 초안 생성/재생성.
+ * 호출 시 segment의 userContent(=한 줄 메모)와 mood/사진 정보가 프롬프트로 들어가고,
+ * 백엔드가 user의 이름/성별/나이를 추가해 호칭/나이대까지 자동 주입한다.
+ */
+export const generateSegmentAiDraft = async (
+  diaryId: number,
+  segmentId: number,
+): Promise<SegmentResponse> => {
+  try {
+    const { data } = await apiClient.post<SegmentResponse>(
+      `/diaries/${diaryId}/segments/${segmentId}/ai-draft`,
+    );
+    return data;
+  } catch (e) {
+    throw new Error(extractApiErrorMessage(e, 'AI 초안을 만들지 못했습니다.'));
   }
 };

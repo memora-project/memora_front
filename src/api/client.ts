@@ -3,6 +3,7 @@ import { API_BASE_URL } from '@env';
 
 export interface ApiErrorPayload {
   error?: string;
+  message?: string;
 }
 
 export const apiClient = axios.create({
@@ -54,6 +55,13 @@ let onAuthError: (() => void) | null = null;
  */
 export const setOnAuthError = (cb: (() => void) | null) => {
   onAuthError = cb;
+};
+
+let onTokenRefreshed: ((tokens: { accessToken: string; refreshToken: string }) => void) | null = null;
+export const setOnTokenRefreshed = (
+  cb: ((tokens: { accessToken: string; refreshToken: string }) => void) | null,
+) => {
+  onTokenRefreshed = cb;
 };
 
 let refreshInFlight: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
@@ -109,22 +117,22 @@ apiClient.interceptors.response.use(
   },
 );
 
-// 새 토큰 발급 시 AuthContext가 AsyncStorage에 영속 저장하도록 알림
-let onTokenRefreshed: ((tokens: { accessToken: string; refreshToken: string }) => void) | null = null;
-export const setOnTokenRefreshed = (
-  cb: ((tokens: { accessToken: string; refreshToken: string }) => void) | null,
-) => {
-  onTokenRefreshed = cb;
-};
-
 /**
- * 백엔드 표준 에러 응답 `{ error: string }`에서 메시지를 추출.
- * 네트워크 오류 등 비-axios 에러일 땐 fallback 반환.
+ * 백엔드 에러 응답에서 메시지 추출. `error` 또는 `message` 필드 중 먼저 발견된 것.
+ * 둘 다 없으면 status code를 fallback에 덧붙여 진단 힌트라도 노출.
  */
 export const extractApiErrorMessage = (e: unknown, fallback: string): string => {
   if (axios.isAxiosError(e)) {
     const err = e as AxiosError<ApiErrorPayload>;
-    return err.response?.data?.error ?? fallback;
+    const data = err.response?.data;
+    if (typeof data?.error === 'string' && data.error.length > 0) return data.error;
+    if (typeof data?.message === 'string' && data.message.length > 0) return data.message;
+    if (err.response?.status) {
+      return `${fallback} (HTTP ${err.response.status})`;
+    }
+    if (err.message) {
+      return `${fallback} (${err.message})`;
+    }
   }
   return fallback;
 };

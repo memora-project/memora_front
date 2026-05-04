@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiClient, extractApiErrorMessage } from './client';
 import type { Gender } from '../types/user';
 
@@ -13,6 +14,10 @@ export interface UserProfile {
   emergencyContact: string | null;
   isReportShared: boolean;
   isKakaoUser: boolean;
+  /** ISO-8601 OffsetDateTime — 가입일시 */
+  createdAt: string;
+  /** 손주 얼굴 사진 url(/uploads/...) — 미설정이면 null. */
+  grandchildPhotoUrl: string | null;
 }
 
 export interface UpdateProfileRequest {
@@ -23,6 +28,8 @@ export interface UpdateProfileRequest {
   address?: string;
   emergencyContact?: string;
   isReportShared?: boolean;
+  /** 빈 문자열로 보내면 백엔드에서 null로 초기화 처리됨. */
+  grandchildPhotoUrl?: string;
 }
 
 /**
@@ -48,6 +55,17 @@ export const updateMe = async (
     const { data } = await apiClient.patch<UserProfile>('/users/me', request);
     return data;
   } catch (e) {
+    // 디버깅용 — 어떤 status / 어떤 응답인지 console에서 확인 가능.
+    if (axios.isAxiosError(e)) {
+      console.warn('[updateMe] PATCH /users/me 실패', {
+        requestBody: request,
+        status: e.response?.status,
+        responseData: e.response?.data,
+        message: e.message,
+      });
+    } else {
+      console.warn('[updateMe] PATCH /users/me 실패 (비-axios)', e);
+    }
     throw new Error(extractApiErrorMessage(e, '내 정보를 수정하지 못했습니다.'));
   }
 };
