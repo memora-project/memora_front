@@ -549,3 +549,6 @@ fabric.properties
 
 .claude/
 HANDOFF_*.html
+
+# 모델 비교 평가용 로컬 도구 (OpenRouter 직접 호출, 백엔드 .env 의존). 일회성 평가 산출물이라 레포에 안 올림.
+ai_evaluation/
