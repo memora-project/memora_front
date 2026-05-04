@@ -147,7 +147,7 @@ const DistrictPicker: React.FC<Props> = ({
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   style={styles.headerSide}
                 >
-                  <Text style={styles.modalBack}>←</Text>
+                  <Text style={styles.modalBack}>‹</Text>
                 </TouchableOpacity>
               )}
 
@@ -262,9 +262,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalBack: {
-    fontSize: 24,
+    fontSize: 30,
     color: '#2C2A28',
     fontWeight: '300',
+    lineHeight: 32,
   },
   modalClose: {
     fontSize: 22,

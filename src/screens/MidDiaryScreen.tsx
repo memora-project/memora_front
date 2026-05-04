@@ -6,16 +6,16 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Image,
   ActivityIndicator,
   PermissionsAndroid,
   Permission,
   Linking,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import ImagePicker, {
   Image as PickerImage,
 } from 'react-native-image-crop-picker';
@@ -25,6 +25,7 @@ import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
 import { pickImageWithExif } from '../native/PhotoExif';
 import { generateAIDraft } from '../api/openrouter';
 import { saveDiary } from '../storage/diaryStorage';
+import { useSettings } from '../contexts/SettingsContext';
 
 /**
  * 필요한 권한 (네이티브 빌드 시 설정)
@@ -75,10 +76,10 @@ const NO_LOCATION_LABEL = '위치 정보 없음';
 const MOODS: Mood[] = [
   { key: 'best', label: '최고에요', emoji: '😄' },
   { key: 'calm', label: '평온해요', emoji: '😌' },
-  { key: 'unsure', label: '저도 모르겠어요', emoji: '🤔' },
+  { key: 'unsure', label: '저도\n모르겠어요', emoji: '🤔' },
   { key: 'sad', label: '슬퍼요', emoji: '😢' },
   { key: 'angry', label: '화나요', emoji: '😠' },
-  { key: 'sick', label: '몸이 안 좋아요', emoji: '🤒' },
+  { key: 'sick', label: '몸이\n안 좋아요', emoji: '🤒' },
 ];
 
 // EXIF의 GPS는 보통 "37,33,12.34" 형태(도/분/초) 또는 십진수로 옵니다.
@@ -218,6 +219,7 @@ const getDeviceLocation = async (): Promise<DeviceCoords | null> => {
 
 
 const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
+  const { scale } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [photoMetadata, setPhotoMetadata] = useState<PhotoMetadata | null>(null);
@@ -225,6 +227,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const [diaryText, setDiaryText] = useState<string>('');
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editMenuVisible, setEditMenuVisible] = useState(false);
 
   // Step 3 진입 시 AI 초안 생성 (OpenRouter 호출)
   useEffect(() => {
@@ -337,6 +340,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const handlePhotoPick = async (source: 'camera' | 'gallery' | 'skip') => {
     if (source === 'skip') {
       setPhotoMetadata(null);
+      setStep(3);
       return;
     }
 
@@ -505,75 +509,92 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleEditMenu = () => {
-    Alert.alert(
-      '어떻게 수정할까요?',
-      '',
-      [
-        {
-          text: '기분 다시 선택',
-          onPress: () => {
-            setDiaryText('');
-            setStep(1);
-          },
-        },
-        {
-          text: '다시 작성',
-          onPress: () => setDiaryText(''),
-        },
-        { text: '직접 수정', style: 'cancel' },
-      ],
-      { cancelable: true },
-    );
+  const handleEditMenu = () => setEditMenuVisible(true);
+
+  const closeEditMenu = () => setEditMenuVisible(false);
+
+  const handleRestartFromMood = () => {
+    closeEditMenu();
+    setDiaryText('');
+    setStep(1);
   };
 
-  const renderStepIndicator = () => (
-    <View style={styles.stepIndicator}>
-      {[1, 2, 3].map(n => (
-        <View
-          key={n}
-          style={[styles.stepDot, step === n && styles.stepDotActive]}
-        />
-      ))}
+  const handleRegenerateAI = () => {
+    closeEditMenu();
+    setDiaryText('');
+  };
+
+  const handleBack = () => {
+    if (step === 1) {
+      navigation.goBack();
+    } else {
+      setStep(prev => (prev - 1) as Step);
+    }
+  };
+
+  const renderTopBar = () => (
+    <View style={styles.topBar}>
+      <TouchableOpacity
+        onPress={handleBack}
+        style={styles.backBtn}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        activeOpacity={0.6}
+      >
+        <Text style={styles.backIcon}>‹</Text>
+      </TouchableOpacity>
+      <View style={styles.stepIndicator}>
+        {[1, 2, 3].map(n => (
+          <View
+            key={n}
+            style={[styles.stepDot, step === n && styles.stepDotActive]}
+          />
+        ))}
+      </View>
+      <View style={styles.backBtn} />
     </View>
   );
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.title}>오늘 어떠신가요?</Text>
-      <Text style={styles.subtitle}>지금의 마음에 가장 가까운 것을 골라주세요</Text>
+      <Text style={[styles.title, { fontSize: scale(26) }]}>
+        오늘 어떠신가요?
+      </Text>
+      <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
+        지금의 마음에 가장 가까운 것을 골라주세요
+      </Text>
 
-      <View style={styles.moodGrid}>
-        {MOODS.map(mood => (
-          <TouchableOpacity
-            key={mood.key}
-            style={styles.moodButton}
-            activeOpacity={0.8}
-            onPress={() => handleMoodSelect(mood)}
-          >
-            <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-            <Text style={styles.moodLabel}>{mood.label}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.moodGridWrap}>
+        <View style={styles.moodGrid}>
+          {MOODS.map(mood => (
+            <TouchableOpacity
+              key={mood.key}
+              style={styles.moodButton}
+              activeOpacity={0.8}
+              onPress={() => handleMoodSelect(mood)}
+            >
+              <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+              <Text
+                style={[
+                  styles.moodLabel,
+                  { fontSize: scale(14), minHeight: scale(38) },
+                ]}
+                numberOfLines={2}
+              >
+                {mood.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
-
-      <TouchableOpacity
-        style={styles.skipButton}
-        onPress={() => handleMoodSelect(null)}
-      >
-        <Text style={styles.skipText}>기분 선택 안 함</Text>
-      </TouchableOpacity>
     </View>
   );
 
   const renderStep2 = () => (
-    <KeyboardAvoidingView
-      style={styles.stepContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-    >
-      <Text style={styles.title}>오늘의 한 장면</Text>
-      <Text style={styles.subtitle}>마음에 남은 사진이 있다면 함께 담아보세요</Text>
+    <View style={styles.stepContainer}>
+      <Text style={[styles.title, { fontSize: scale(26) }]}>오늘의 한 장면</Text>
+      <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
+        마음에 남은 사진이 있다면 함께 담아보세요
+      </Text>
 
       {photoMetadata?.uri ? (
         <View style={styles.thumbnailWrap}>
@@ -585,7 +606,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           {isPickingPhoto && (
             <View style={styles.thumbnailOverlay}>
               <ActivityIndicator color="#FFFFFF" />
-              <Text style={styles.thumbnailOverlayText}>
+              <Text style={[styles.thumbnailOverlayText, { fontSize: scale(13) }]}>
                 메타데이터 추출 중...
               </Text>
             </View>
@@ -601,7 +622,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           onPress={() => handlePhotoPick('camera')}
         >
           <Text style={styles.photoIcon}>📷</Text>
-          <Text style={styles.photoLabel}>카메라</Text>
+          <Text style={[styles.photoLabel, { fontSize: scale(15) }]}>카메라</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -611,7 +632,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           onPress={() => handlePhotoPick('gallery')}
         >
           <Text style={styles.photoIcon}>🖼️</Text>
-          <Text style={styles.photoLabel}>갤러리</Text>
+          <Text style={[styles.photoLabel, { fontSize: scale(15) }]}>갤러리</Text>
         </TouchableOpacity>
       </View>
 
@@ -624,11 +645,11 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       )}
 
       <View style={styles.memoBlock}>
-        <Text style={styles.memoLabel}>
+        <Text style={[styles.memoLabel, { fontSize: scale(14) }]}>
           오늘 무슨 일이 있었나요? (키워드나 한 줄 메모)
         </Text>
         <TextInput
-          style={styles.memoInput}
+          style={[styles.memoInput, { fontSize: scale(15) }]}
           value={shortMemo}
           onChangeText={setShortMemo}
           placeholder="예) 오랜만에 동네 산책, 손주가 보고 싶은 날"
@@ -649,7 +670,9 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           disabled={isPickingPhoto}
           onPress={() => handlePhotoPick('skip')}
         >
-          <Text style={styles.skipText}>사진 선택 안 함</Text>
+          <Text style={[styles.skipText, { fontSize: scale(14) }]}>
+            사진 선택 안 함
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -658,19 +681,20 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           disabled={isPickingPhoto}
           onPress={() => setStep(3)}
         >
-          <Text style={styles.nextButtonText}>다음</Text>
+          <Text style={[styles.nextButtonText, { fontSize: scale(16) }]}>
+            다음
+          </Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 
   const renderStep3 = () => (
-    <KeyboardAvoidingView
-      style={styles.stepContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Text style={styles.title}>AI가 다듬어 본 초안이에요</Text>
-      <Text style={styles.subtitle}>
+    <View style={styles.stepContainer}>
+      <Text style={[styles.title, { fontSize: scale(26) }]}>
+        AI가 다듬어 본 초안이에요
+      </Text>
+      <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
         마음에 들면 그대로, 아니라면 자유롭게 고쳐주세요
       </Text>
 
@@ -685,13 +709,13 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       {isGenerating ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color="#2C2A28" />
-          <Text style={styles.loadingText}>
+          <Text style={[styles.loadingText, { fontSize: scale(14) }]}>
             AI가 오늘의 기억을 문장으로 엮고 있어요...
           </Text>
         </View>
       ) : (
         <TextInput
-          style={styles.diaryInput}
+          style={[styles.diaryInput, { fontSize: scale(16) }]}
           value={diaryText}
           onChangeText={setDiaryText}
           multiline
@@ -707,7 +731,9 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           activeOpacity={0.85}
           onPress={handleEditMenu}
         >
-          <Text style={styles.actionSecondaryText}>수정!</Text>
+          <Text style={[styles.actionSecondaryText, { fontSize: scale(16) }]}>
+            수정할래요!
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -716,10 +742,12 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           disabled={isGenerating}
           onPress={handleSave}
         >
-          <Text style={styles.actionPrimaryText}>마음에 들어요!</Text>
+          <Text style={[styles.actionPrimaryText, { fontSize: scale(16) }]}>
+            마음에 들어요!
+          </Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 
   return (
@@ -727,15 +755,102 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       style={styles.container}
       edges={['top', 'left', 'right', 'bottom']}
     >
-      {renderStepIndicator()}
-      <ScrollView
+      {renderTopBar()}
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid={true}
+        extraScrollHeight={24}
       >
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
-      </ScrollView>
+      </KeyboardAwareScrollView>
+
+      {/* 수정 메뉴 모달 (step 3) */}
+      <Modal
+        visible={editMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeEditMenu}
+      >
+        <TouchableOpacity
+          style={styles.menuBackdrop}
+          activeOpacity={1}
+          onPress={closeEditMenu}
+        >
+          <View style={styles.menuSheet}>
+            <Text style={[styles.menuTitle, { fontSize: scale(20) }]}>
+              어떻게 수정할까요?
+            </Text>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              activeOpacity={0.7}
+              onPress={handleRestartFromMood}
+            >
+              <Text style={styles.menuItemEmoji}>🎭</Text>
+              <View style={styles.menuItemTextWrap}>
+                <Text style={[styles.menuItemTitle, { fontSize: scale(17) }]}>
+                  기분부터 다시
+                </Text>
+                <Text style={[styles.menuItemDesc, { fontSize: scale(13) }]}>
+                  처음 단계로 돌아가요
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              activeOpacity={0.7}
+              onPress={handleRegenerateAI}
+            >
+              <Text style={styles.menuItemEmoji}>✨</Text>
+              <View style={styles.menuItemTextWrap}>
+                <Text style={[styles.menuItemTitle, { fontSize: scale(17) }]}>
+                  AI에게 다시 부탁
+                </Text>
+                <Text style={[styles.menuItemDesc, { fontSize: scale(13) }]}>
+                  새 초안을 받아봐요
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              activeOpacity={0.7}
+              onPress={closeEditMenu}
+            >
+              <Text style={styles.menuItemEmoji}>✏️</Text>
+              <View style={styles.menuItemTextWrap}>
+                <Text style={[styles.menuItemTitle, { fontSize: scale(17) }]}>
+                  직접 고치기
+                </Text>
+                <Text style={[styles.menuItemDesc, { fontSize: scale(13) }]}>
+                  지금 글에서 손볼게요
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemCancel]}
+              activeOpacity={0.7}
+              onPress={closeEditMenu}
+            >
+              <Text
+                style={[
+                  styles.menuItemTitle,
+                  styles.menuItemCancelText,
+                  { fontSize: scale(16) },
+                ]}
+              >
+                취소
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -745,11 +860,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAF8F5',
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIcon: {
+    fontSize: 30,
+    color: '#2C2A28',
+    fontWeight: '300',
+    lineHeight: 32,
+  },
   stepIndicator: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     gap: 8,
   },
   stepDot: {
@@ -771,23 +906,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 24,
   },
+  moodGridWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 24,
+  },
   title: {
-    fontSize: 26,
     fontWeight: '700',
     color: '#2C2A28',
     letterSpacing: -0.5,
   },
   subtitle: {
     marginTop: 8,
-    fontSize: 14,
     color: '#8A857F',
-    marginBottom: 32,
+    marginBottom: 28,
   },
   moodGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 12,
+    rowGap: 14,
   },
   moodButton: {
     width: '31%',
@@ -804,14 +942,15 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   moodEmoji: {
-    fontSize: 36,
-    marginBottom: 8,
+    fontSize: 32,
+    marginBottom: 6,
   },
   moodLabel: {
-    fontSize: 12,
     color: '#3D3A37',
     fontWeight: '500',
     textAlign: 'center',
+    textAlignVertical: 'center',
+    lineHeight: 18,
   },
   thumbnailWrap: {
     width: '100%',
@@ -865,12 +1004,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#3D3A37',
     fontWeight: '500',
-  },
-  skipButton: {
-    alignSelf: 'center',
-    marginTop: 32,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
   },
   skipText: {
     fontSize: 14,
@@ -984,6 +1117,70 @@ const styles = StyleSheet.create({
     color: '#3D3A37',
     fontSize: 16,
     fontWeight: '500',
+  },
+
+  // 수정 메뉴 모달
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  menuSheet: {
+    backgroundColor: '#FAF8F5',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 32,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2C2A28',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 10,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  menuItemCancel: {
+    backgroundColor: '#F2EEE8',
+    justifyContent: 'center',
+    marginBottom: 0,
+  },
+  menuItemCancelText: {
+    textAlign: 'center',
+    color: '#3D3A37',
+    fontWeight: '600',
+    fontSize: 16,
+    marginBottom: 0,
+  },
+  menuItemEmoji: {
+    fontSize: 28,
+  },
+  menuItemTextWrap: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#2C2A28',
+    marginBottom: 2,
+  },
+  menuItemDesc: {
+    fontSize: 13,
+    color: '#8A857F',
   },
 });
 

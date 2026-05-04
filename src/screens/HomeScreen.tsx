@@ -2,7 +2,6 @@ import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
   TouchableOpacity,
   StatusBar,
@@ -11,81 +10,44 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AppHeader from '../components/AppHeader';
-import Grandchild, { type GrandchildMood } from '../components/Grandchild';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 
 import type { HomeScreenProps } from '../navigation/AppNavigator';
-import { getAllDiaries, type DiaryEntry } from '../storage/diaryStorage';
+import { getTodayDiaries, type DiaryEntry } from '../storage/diaryStorage';
+import {
+  resolveNickname,
+  EMPTY_DAY_GREETING,
+  FINAL_DONE_GREETING,
+  DEFAULT_AFTER_DIARY_GREETING,
+  MOOD_GREETING_TEXT,
+} from '../constants/grandparent';
 
-const formatDate = (iso: string): string => {
-  return iso.slice(0, 10);
-};
-
-// 시간대별 인사말
-const getGreeting = (
-  name: string | null,
-  hasEntryToday: boolean,
-): { message: string; mood: GrandchildMood } => {
-  const hour = new Date().getHours();
-  const userName = name || '할머니';
-
-  if (hasEntryToday) {
-    return {
-      message: `${userName}, 오늘도 일기 써주셔서 감사해요! 💛`,
-      mood: 'happy',
-    };
-  }
-
-  if (hour < 6) {
-    return {
-      message: `${userName}, 너무 늦은 시간이에요. 편안한 밤 되세요.`,
-      mood: 'caring',
-    };
-  }
-  if (hour < 12) {
-    return {
-      message: `${userName}, 좋은 아침이에요! 오늘은 어떠셨어요?`,
-      mood: 'curious',
-    };
-  }
-  if (hour < 18) {
-    return {
-      message: `${userName}, 오후도 잘 보내고 계신가요?`,
-      mood: 'caring',
-    };
-  }
-  return {
-    message: `${userName}, 오늘 하루도 수고하셨어요!`,
-    mood: 'cheering',
-  };
-};
+/**
+ * 홈 화면 — 3가지 케이스 모두 동일 레이아웃 (이모지 + 말풍선):
+ *  (A) 오늘 일기 0건             → 손주 표정 이모지 + "오늘 어떠세요?"
+ *  (B) 일반 일기 ≥1, 마무리 없음  → 가장 최근 기분 이모지 + 기분별 멘트
+ *  (C) 마무리 일기 작성 완료      → 마무리 일기 기분 + 수고 멘트 (+ 추가 작성 가능)
+ *
+ * 레이아웃: content(가운데, flex:1) + footer(버튼, 하단 고정).
+ * 말풍선엔 위쪽 삼각형 꼬리 → 이모지에서 말이 나오는 듯한 시각 효과.
+ */
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const { scale } = useSettings();
-  const userName = null;
-  // 오늘 일기 작성 여부 확인
-  const hasEntryToday = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return entries.some(entry => formatDate(entry.createdAt) === today);
-  }, [entries]);
+  const { userGender, userNickname } = useAuth();
 
-  // 손주 인사말
-  const greeting = useMemo(
-    () => getGreeting(userName, hasEntryToday),
-    [userName, hasEntryToday],
-  );
+  const [todayEntries, setTodayEntries] = useState<DiaryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 화면이 포커스될 때마다 (저장 후 돌아왔을 때 포함) 최신 목록을 다시 가져온다.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         setIsLoading(true);
         try {
-          const list = await getAllDiaries();
-          if (!cancelled) setEntries(list);
+          const list = await getTodayDiaries();
+          if (!cancelled) setTodayEntries(list);
         } finally {
           if (!cancelled) setIsLoading(false);
         }
@@ -96,59 +58,115 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }, []),
   );
 
-  const handleOpenDetail = (entry: DiaryEntry) => {
-    navigation.navigate('Detail', { entryId: entry.id });
-  };
-
-  const handleWriteNew = () => {
-    navigation.navigate('MidDiary');
-  };
-
-  // 손주 인사 카드 (FlatList 헤더로 사용)
-  const renderListHeader = () => (
-    <View style={styles.greetingCard}>
-      <Grandchild
-        message={greeting.message}
-        mood={greeting.mood}
-        size="large"
-        // photoUri={null}  // TODO: 미래 — 사용자가 설정한 손주 사진
-        // gender="grandson" // TODO: 미래 — 설정에서 손자/손녀 선택
-      />
-    </View>
+  const nickname = useMemo(
+    () => resolveNickname(userNickname, userGender),
+    [userNickname, userGender],
   );
 
-  const renderItem = ({ item }: { item: DiaryEntry }) => (
-    <TouchableOpacity
-      style={styles.item}
-      activeOpacity={0.85}
-      onPress={() => handleOpenDetail(item)}
-    >
-      <View style={styles.itemHeader}>
-        <Text style={[styles.itemDate, { fontSize: scale(13) }]}>
-          {formatDate(item.createdAt)}
-        </Text>
-        {item.mood && <Text style={styles.itemMood}>{item.mood.emoji}</Text>}
+  const finalEntry = useMemo(
+    () => todayEntries.find(e => e.isFinal) ?? null,
+    [todayEntries],
+  );
+
+  const latestNormal = useMemo(
+    () => todayEntries.find(e => !e.isFinal) ?? null,
+    [todayEntries],
+  );
+
+  const handleWriteNormal = () => navigation.navigate('MidDiary');
+  const handleWriteFinal = () => navigation.navigate('FinalDiary');
+
+  // ───────────────────────────────────────
+  // 케이스별 데이터 계산
+  // ───────────────────────────────────────
+
+  type CaseData = { emoji: string; bubbleText: string };
+
+  const caseData = useMemo<CaseData>(() => {
+    if (finalEntry) {
+      return {
+        emoji: finalEntry.mood?.emoji ?? '🌙',
+        bubbleText: `${nickname}, ${FINAL_DONE_GREETING}`,
+      };
+    }
+    if (latestNormal) {
+      const moodKey = latestNormal.mood?.key;
+      const greetingText =
+        (moodKey && MOOD_GREETING_TEXT[moodKey]) ||
+        DEFAULT_AFTER_DIARY_GREETING;
+      return {
+        emoji: latestNormal.mood?.emoji ?? '🙂',
+        bubbleText: `${nickname}, ${greetingText}`,
+      };
+    }
+    // 케이스 A — 손주 표정 (성별에 맞춰 다정한 인사 표정)
+    return {
+      emoji: userGender === 'MALE' ? '🧒' : '👧',
+      bubbleText: `${nickname}, ${EMPTY_DAY_GREETING}`,
+    };
+  }, [finalEntry, latestNormal, nickname, userGender]);
+
+  // ───────────────────────────────────────
+  // 푸터 (버튼 영역 — 하단 고정)
+  // ───────────────────────────────────────
+
+  const renderFooter = () => {
+    // 마무리 후 — 추가 일기만
+    if (finalEntry) {
+      return (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.btnFull]}
+            onPress={handleWriteNormal}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.primaryBtnText, { fontSize: scale(17) }]}>
+              추가 일기 작성하기
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    // 일반 일기 있음 — 추가 + 마무리
+    if (latestNormal) {
+      return (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.btnFull]}
+            onPress={handleWriteNormal}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.primaryBtnText, { fontSize: scale(17) }]}>
+              추가 일기 작성하기
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.btnFull]}
+            onPress={handleWriteFinal}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.secondaryBtnText, { fontSize: scale(17) }]}>
+              마무리 일기 작성하기
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    // 케이스 A — 첫 일기
+    return (
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.primaryBtn, styles.btnFull]}
+          onPress={handleWriteNormal}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.primaryBtnText, { fontSize: scale(17) }]}>
+            오늘의 일기 작성하기
+          </Text>
+        </TouchableOpacity>
       </View>
-      <Text
-        style={[styles.itemSummary, { fontSize: scale(15) }]}
-        numberOfLines={2}
-      >
-        {item.content}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const renderEmpty = () => (
-    <View style={styles.emptyWrap}>
-      <Text style={styles.emptyEmoji}>📔</Text>
-      <Text style={[styles.emptyTitle, { fontSize: scale(18) }]}>
-        첫 일기를 작성해 보세요!
-      </Text>
-      <Text style={[styles.emptySubtitle, { fontSize: scale(14) }]}>
-        오른쪽 아래 + 버튼을 눌러 오늘의 마음을 담아보세요
-      </Text>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -160,27 +178,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <ActivityIndicator color="#2C2A28" />
         </View>
       ) : (
-        <FlatList
-          data={entries}
-          keyExtractor={item => item.id}
-          renderItem={renderItem}
-          ListHeaderComponent={renderListHeader}
-          contentContainerStyle={[
-            styles.listContent,
-            entries.length === 0 && styles.listContentEmpty,
-          ]}
-          ListEmptyComponent={renderEmpty}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+        <>
+          <View style={styles.content}>
+            <Text style={styles.bigEmoji}>{caseData.emoji}</Text>
 
-      <TouchableOpacity
-        style={styles.fab}
-        activeOpacity={0.85}
-        onPress={handleWriteNew}
-      >
-        <Text style={styles.fabIcon}>＋</Text>
-      </TouchableOpacity>
+            {/* 말풍선 — 이모지에서 말이 나오는 듯 위쪽에 삼각형 꼬리 */}
+            <View style={styles.bubbleTail} />
+            <View style={styles.bubble}>
+              <Text style={[styles.bubbleText, { fontSize: scale(15) }]}>
+                {caseData.bubbleText}
+              </Text>
+            </View>
+          </View>
+          {renderFooter()}
+        </>
+      )}
     </SafeAreaView>
   );
 };
@@ -190,115 +202,91 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAF8F5',
   },
-  headerWrap: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#2C2A28',
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#8A857F',
-  },
   loadingWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  listContent: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 120,
-  },
-  listContentEmpty: {
-    flexGrow: 1,
+
+  // 가운데 시각 영역 — flex로 늘어나서 푸터 위 빈 공간 흡수
+  content: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 28,
   },
 
-  // 손주 인사 카드
-  greetingCard: {
-    backgroundColor: '#FFFCF5',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#F4E5C9',
-  },
-
-  item: {
-    backgroundColor: '#FFFFFF',
-    padding: 18,
-    borderRadius: 16,
+  bigEmoji: {
+    fontSize: 130,
     marginBottom: 12,
+  },
+
+  // 말풍선 꼬리 — 위로 향한 작은 삼각형 (이모지 쪽).
+  // RN의 border 트릭으로 삼각형 그리기.
+  bubbleTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderBottomWidth: 12,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#FFFFFF',
+    marginBottom: -1, // 본체와 살짝 겹쳐서 봉합 — 그림자 사이 틈 방지
+  },
+
+  bubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 16,
+    maxWidth: '100%',
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  itemDate: {
-    color: '#A09B95',
+  bubbleText: {
+    color: '#3D3A37',
     fontWeight: '500',
-  },
-  itemMood: {
-    fontSize: 22,
-  },
-  itemSummary: {
-    color: '#3D3A37',
     lineHeight: 22,
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontWeight: '600',
-    color: '#3D3A37',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    color: '#8A857F',
     textAlign: 'center',
-    lineHeight: 20,
   },
-  fab: {
-    position: 'absolute',
-    right: 24,
-    bottom: 32,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+
+  // 푸터 — 화면 하단
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    paddingTop: 12,
+    gap: 10,
+  },
+  btnFull: {
+    width: '100%',
+  },
+  primaryBtn: {
     backgroundColor: '#2C2A28',
+    paddingVertical: 18,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
-  fabIcon: {
+  primaryBtnText: {
     color: '#FFFFFF',
-    fontSize: 30,
-    fontWeight: '300',
-    lineHeight: 32,
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#2C2A28',
+    paddingVertical: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtnText: {
+    color: '#2C2A28',
+    fontWeight: '700',
   },
 });
 

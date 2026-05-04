@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, type Gender } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import BirthdatePicker from '../components/BirthdatePicker';
 import DistrictPicker from '../components/DistrictPicker';
@@ -18,12 +18,22 @@ import type { District } from '../constants/districts';
 import type { ProfileEditScreenProps } from '../navigation/AppNavigator';
 
 const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => {
-  const { userName, userBirthDate, userAddress, updateProfile } = useAuth();
+  const {
+    userName,
+    userBirthDate,
+    userAddress,
+    userGender,
+    userNickname,
+    updateProfile,
+    updateNickname,
+  } = useAuth();
   const { scale } = useSettings();
 
   const [name, setName] = useState(userName ?? '');
   const [birthDate, setBirthDate] = useState(userBirthDate ?? '');
   const [address, setAddress] = useState(userAddress ?? '');
+  const [gender, setGender] = useState<Gender | ''>(userGender ?? '');
+  const [nickname, setNickname] = useState(userNickname ?? '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -44,10 +54,16 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
       Alert.alert('알림', '주소를 선택해 주세요.');
       return;
     }
+    if (!gender) {
+      Alert.alert('알림', '성별을 선택해 주세요.');
+      return;
+    }
 
     try {
       setSaving(true);
-      await updateProfile(name.trim(), birthDate, address);
+      // 백엔드 PATCH 먼저. 호칭은 로컬 only — 백엔드 성공 후에 저장.
+      await updateProfile(name.trim(), birthDate, address, gender);
+      await updateNickname(nickname);
       Alert.alert('저장 완료', '프로필이 수정되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
@@ -58,14 +74,35 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
     }
   };
 
+  const renderGenderOption = (value: Gender, label: string) => {
+    const isActive = gender === value;
+    return (
+      <TouchableOpacity
+        key={value}
+        style={[styles.genderBtn, isActive && styles.genderBtnActive]}
+        onPress={() => setGender(value)}
+        activeOpacity={0.7}
+      >
+        <Text style={[
+          styles.genderText,
+          isActive && styles.genderTextActive,
+          { fontSize: scale(16) },
+        ]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.backTouch}
         >
-          <Text style={styles.backBtn}>←</Text>
+          <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>프로필 수정</Text>
         <View style={styles.headerSpacer} />
@@ -92,6 +129,34 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
             multiline
             numberOfLines={1}
           />
+        </View>
+
+        {/* 호칭 (선택) */}
+        <View style={styles.inputWrap}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>호칭 (선택)</Text>
+          <TextInput
+            style={[styles.input, { fontSize: scale(17) }]}
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="예: 박옥자 어르신, 엄마"
+            placeholderTextColor="#B5AFA8"
+            multiline
+            numberOfLines={1}
+          />
+          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
+            손주가 어떻게 부를지 정해보세요. 비워두면 성별에 맞춰 자동으로 정해져요.
+          </Text>
+        </View>
+
+        {/* 성별 */}
+        <View style={styles.inputWrap}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
+            성별 <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={styles.genderRow}>
+            {renderGenderOption('MALE', '남성')}
+            {renderGenderOption('FEMALE', '여성')}
+          </View>
         </View>
 
         {/* 생년월일 */}
@@ -144,11 +209,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
   },
-  backBtn: {
-    fontSize: 28,
-    color: '#2C2A28',
+  backTouch: {
     width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtn: {
+    fontSize: 30,
+    color: '#2C2A28',
     fontWeight: '300',
+    lineHeight: 32,
   },
   headerTitle: {
     fontWeight: '700',
@@ -183,6 +254,36 @@ const styles = StyleSheet.create({
     color: '#2C2A28',
     minHeight: 52,
     textAlignVertical: 'center',
+  },
+  helperText: {
+    marginTop: 6,
+    color: '#A09B95',
+    lineHeight: 18,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EFEAE3',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  genderBtnActive: {
+    backgroundColor: '#2C2A28',
+    borderColor: '#2C2A28',
+  },
+  genderText: {
+    color: '#3D3A37',
+    fontWeight: '500',
+  },
+  genderTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   saveBtn: {
     backgroundColor: '#2C2A28',

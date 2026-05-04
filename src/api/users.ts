@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiClient, extractApiErrorMessage } from './client';
 import type { Gender } from '../types/user';
 
@@ -48,6 +49,17 @@ export const updateMe = async (
     const { data } = await apiClient.patch<UserProfile>('/users/me', request);
     return data;
   } catch (e) {
+    // 디버깅용 — 어떤 status / 어떤 응답인지 console에서 확인 가능.
+    if (axios.isAxiosError(e)) {
+      console.warn('[updateMe] PATCH /users/me 실패', {
+        requestBody: request,
+        status: e.response?.status,
+        responseData: e.response?.data,
+        message: e.message,
+      });
+    } else {
+      console.warn('[updateMe] PATCH /users/me 실패 (비-axios)', e);
+    }
     throw new Error(extractApiErrorMessage(e, '내 정보를 수정하지 못했습니다.'));
   }
 };

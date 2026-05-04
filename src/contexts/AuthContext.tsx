@@ -7,7 +7,7 @@ import React, {
   ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAccessToken } from '../api/client';
+import { setAccessToken, setOnAuthFailure } from '../api/client';
 import { getMe, updateMe, type UserProfile } from '../api/users';
 import type { Gender } from '../types/user';
 
@@ -27,7 +27,9 @@ const STORAGE_KEYS = {
   USER_BIRTH_DATE: '@memora:user_birth_date',
   USER_ADDRESS: '@memora:user_address',       // 한글 동네명 ('유성구 봉명동')
   USER_PHONE_NUMBER: '@memora:user_phone_number',
+  USER_EMERGENCY_CONTACT: '@memora:user_emergency_contact',
   USER_CREATED_AT: '@memora:user_created_at',
+  USER_NICKNAME: '@memora:user_nickname',  // 사용자가 직접 설정한 호칭 (없으면 성별 기반 자동)
 } as const;
 
 type AuthContextValue = {
@@ -39,14 +41,19 @@ type AuthContextValue = {
   userBirthDate: string | null;      // 'YYYY-MM-DD'
   userAddress: string | null;        // '유성구 봉명동'
   userPhoneNumber: string | null;
+  userEmergencyContact: string | null;
   userCreatedAt: string | null;      // 가입일시 (백엔드 응답에 없으면 null 유지)
+  userNickname: string | null;       // 손주가 부를 호칭. 빈 값이면 성별 기반 자동.
   login: (email: string, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (
     name: string,
     birthDate: string,
     address: string,
+    gender: Gender,
   ) => Promise<void>;
+  updateEmergencyContact: (contact: string) => Promise<void>;
+  updateNickname: (nickname: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -64,13 +71,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userBirthDate, setUserBirthDate] = useState<string | null>(null);
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string | null>(null);
+  const [userEmergencyContact, setUserEmergencyContact] = useState<string | null>(null);
   const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
+  const [userNickname, setUserNickname] = useState<string | null>(null);
 
   /**
    * /users/me 응답을 AsyncStorage + state에 일괄 반영.
    * 로그인 직후, 회원가입 직후, PATCH /users/me 직후 호출.
    */
   const persistProfile = useCallback(async (profile: UserProfile) => {
+    // emergencyContact는 nullable. null이면 키 제거, 값 있으면 저장.
+    const emergencyContact = profile.emergencyContact ?? '';
     await Promise.all([
       AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, profile.loginId),
       AsyncStorage.setItem(STORAGE_KEYS.USER_NAME, profile.name),
@@ -78,6 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       AsyncStorage.setItem(STORAGE_KEYS.USER_BIRTH_DATE, profile.birthDate),
       AsyncStorage.setItem(STORAGE_KEYS.USER_ADDRESS, profile.address),
       AsyncStorage.setItem(STORAGE_KEYS.USER_PHONE_NUMBER, profile.phoneNumber),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_EMERGENCY_CONTACT, emergencyContact),
     ]);
     setUserEmail(profile.loginId);
     setUserName(profile.name);
@@ -85,6 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserBirthDate(profile.birthDate);
     setUserAddress(profile.address);
     setUserPhoneNumber(profile.phoneNumber);
+    setUserEmergencyContact(emergencyContact || null);
   }, []);
 
   // 앱 시작 시 — 저장된 정보 복구
@@ -100,7 +113,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           birthDate,
           address,
           phoneNumber,
+          emergencyContact,
           createdAt,
+          nickname,
         ] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN),
           AsyncStorage.getItem(STORAGE_KEYS.USER_EMAIL),
@@ -109,7 +124,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           AsyncStorage.getItem(STORAGE_KEYS.USER_BIRTH_DATE),
           AsyncStorage.getItem(STORAGE_KEYS.USER_ADDRESS),
           AsyncStorage.getItem(STORAGE_KEYS.USER_PHONE_NUMBER),
+          AsyncStorage.getItem(STORAGE_KEYS.USER_EMERGENCY_CONTACT),
           AsyncStorage.getItem(STORAGE_KEYS.USER_CREATED_AT),
+          AsyncStorage.getItem(STORAGE_KEYS.USER_NICKNAME),
         ]);
         savedToken = token;
 
@@ -123,7 +140,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUserBirthDate(birthDate);
           setUserAddress(address);
           setUserPhoneNumber(phoneNumber);
+          setUserEmergencyContact(emergencyContact && emergencyContact.length > 0 ? emergencyContact : null);
           setUserCreatedAt(createdAt);
+          setUserNickname(nickname && nickname.length > 0 ? nickname : null);
         }
       } catch (error) {
         console.error('세션 복구 실패:', error);
@@ -163,6 +182,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const profile = await getMe();
         await persistProfile(profile);
 
+        // 가입 일시는 백엔드 /users/me에 아직 없음. 신규 회원가입 직전에
+        // SignUpScreen이 AsyncStorage에 미리 저장해두면 여기서 끌어올림.
+        const createdAt = await AsyncStorage.getItem(STORAGE_KEYS.USER_CREATED_AT);
+        setUserCreatedAt(createdAt);
+
         // 3. 모든 데이터 준비된 후에 로그인 상태 마킹
         setIsLoggedIn(true);
       } catch (error) {
@@ -193,7 +217,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         STORAGE_KEYS.USER_BIRTH_DATE,
         STORAGE_KEYS.USER_ADDRESS,
         STORAGE_KEYS.USER_PHONE_NUMBER,
+        STORAGE_KEYS.USER_EMERGENCY_CONTACT,
         STORAGE_KEYS.USER_CREATED_AT,
+        STORAGE_KEYS.USER_NICKNAME,
       ]);
       setAccessToken(null);
       setIsLoggedIn(false);
@@ -203,18 +229,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUserBirthDate(null);
       setUserAddress(null);
       setUserPhoneNumber(null);
+      setUserEmergencyContact(null);
       setUserCreatedAt(null);
+      setUserNickname(null);
     } catch (error) {
       console.error('로그아웃 실패:', error);
       throw error;
     }
   }, []);
 
+  // axios 인터셉터에서 refresh가 실패했을 때 호출될 콜백 등록.
+  // refreshToken까지 만료/거부된 상황 — 사용자를 로그인 화면으로 돌려보냄.
+  useEffect(() => {
+    setOnAuthFailure(() => {
+      console.warn('refresh 실패 → 자동 로그아웃');
+      logout().catch(e => console.warn('자동 로그아웃 처리 중 오류:', e));
+    });
+    return () => setOnAuthFailure(null);
+  }, [logout]);
+
   const updateProfile = useCallback(
-    async (name: string, birthDate: string, address: string) => {
+    async (name: string, birthDate: string, address: string, gender: Gender) => {
       try {
         // PATCH /users/me — 변경 필드만. 응답으로 전체 프로필이 돌아오므로 그것을 source of truth로 반영.
-        const profile = await updateMe({ name, birthDate, address });
+        const profile = await updateMe({ name, birthDate, address, gender });
         await persistProfile(profile);
       } catch (error) {
         console.error('프로필 업데이트 실패:', error);
@@ -222,6 +260,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     },
     [persistProfile],
+  );
+
+  /**
+   * 호칭 업데이트 — 로컬 only (백엔드 UserProfile에 호칭 필드 없음).
+   * 빈 문자열이면 사용자가 자동(성별 기반)으로 돌아가고 싶다는 의미로 처리.
+   */
+  const updateNickname = useCallback(async (nickname: string) => {
+    const trimmed = nickname.trim();
+    try {
+      if (trimmed.length === 0) {
+        await AsyncStorage.removeItem(STORAGE_KEYS.USER_NICKNAME);
+        setUserNickname(null);
+      } else {
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_NICKNAME, trimmed);
+        setUserNickname(trimmed);
+      }
+    } catch (error) {
+      console.error('호칭 저장 실패:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateEmergencyContact = useCallback(
+    async (contact: string) => {
+      try {
+        // 백엔드가 partial update를 제대로 지원하지 않을 가능성에 대비해
+        // 현재 프로필 필드도 함께 PATCH로 보냄. 이렇게 하면 "다른 필드 누락" 검증에 안 걸림.
+        const profile = await updateMe({
+          ...(userName ? { name: userName } : {}),
+          ...(userBirthDate ? { birthDate: userBirthDate } : {}),
+          ...(userAddress ? { address: userAddress } : {}),
+          ...(userGender ? { gender: userGender } : {}),
+          ...(userPhoneNumber ? { phoneNumber: userPhoneNumber } : {}),
+          emergencyContact: contact,
+        });
+        await persistProfile(profile);
+      } catch (error) {
+        console.error('비상 연락처 업데이트 실패:', error);
+        throw error;
+      }
+    },
+    [persistProfile, userName, userBirthDate, userAddress, userGender, userPhoneNumber],
   );
 
   const value: AuthContextValue = {
@@ -233,10 +313,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     userBirthDate,
     userAddress,
     userPhoneNumber,
+    userEmergencyContact,
     userCreatedAt,
+    userNickname,
     login,
     logout,
     updateProfile,
+    updateEmergencyContact,
+    updateNickname,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
