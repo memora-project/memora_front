@@ -30,6 +30,13 @@ export interface DiaryEntry {
    * - 'none'   : 둘 다 없음
    */
   locationSource: 'photo' | 'device' | 'none';
+  /**
+   * 그날의 "최종 일기" 여부.
+   * - false: 일반 일기 (그날 여러 개 가능)
+   * - true: 그 날을 마무리하는 종합 일기. 하루 1개만 작성 가능.
+   * 기존 데이터엔 이 필드가 없을 수 있어서 readAll에서 false로 normalize.
+   */
+  isFinal: boolean;
 }
 
 const generateId = (): string =>
@@ -40,7 +47,12 @@ const readAll = async (): Promise<DiaryEntry[]> => {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as DiaryEntry[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    // 기존 데이터에 isFinal 필드가 없을 수 있어서 normalize.
+    return (parsed as Array<Partial<DiaryEntry>>).map(e => ({
+      ...(e as DiaryEntry),
+      isFinal: e.isFinal === true,
+    }));
   } catch (e) {
     console.warn('[diaryStorage] JSON 파싱 실패, 빈 목록으로 복구:', e);
     return [];
@@ -51,14 +63,20 @@ const writeAll = async (entries: DiaryEntry[]): Promise<void> => {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 };
 
-/** 저장. id/createdAt은 자동 생성. 최신순으로 앞에 prepend. */
+/**
+ * 저장. id/createdAt은 자동 생성. 최신순으로 앞에 prepend.
+ * `isFinal`은 옵셔널로 받고 미지정 시 false로 저장 (= 일반 일기).
+ */
 export const saveDiary = async (
-  draft: Omit<DiaryEntry, 'id' | 'createdAt'>,
+  draft: Omit<DiaryEntry, 'id' | 'createdAt' | 'isFinal'> & {
+    isFinal?: boolean;
+  },
 ): Promise<DiaryEntry> => {
   const entry: DiaryEntry = {
     ...draft,
     id: generateId(),
     createdAt: new Date().toISOString(),
+    isFinal: draft.isFinal ?? false,
   };
   try {
     const list = await readAll();
@@ -81,10 +99,58 @@ export const getAllDiaries = async (): Promise<DiaryEntry[]> => {
   }
 };
 
+/** 로컬 시간 기준으로 두 날짜가 같은 일자인지 비교. */
+const isSameLocalDay = (iso: string, ref: Date): boolean => {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+};
+
+/**
+ * 오늘(로컬 자정~자정) 작성된 일기만 — 최신순.
+ * 일반 일기 + 최종 일기 모두 포함.
+ */
+export const getTodayDiaries = async (): Promise<DiaryEntry[]> => {
+  const all = await getAllDiaries();
+  const today = new Date();
+  return all.filter(e => isSameLocalDay(e.createdAt, today));
+};
+
+/**
+ * 오늘의 최종 일기. 없으면 null.
+ * 하루에 1개만 존재한다고 보장 (FinalDiaryScreen이 작성 시점에 중복 검사).
+ */
+export const getTodayFinalDiary = async (): Promise<DiaryEntry | null> => {
+  const today = await getTodayDiaries();
+  return today.find(e => e.isFinal) ?? null;
+};
+
 /** ID로 단건 조회. 없으면 null. */
 export const getDiaryById = async (id: string): Promise<DiaryEntry | null> => {
   const list = await readAll();
   return list.find(e => e.id === id) ?? null;
+};
+
+/** ID로 부분 업데이트. 변경된 엔트리를 반환, 없으면 null. */
+export const updateDiary = async (
+  id: string,
+  patch: Partial<Omit<DiaryEntry, 'id' | 'createdAt'>>,
+): Promise<DiaryEntry | null> => {
+  try {
+    const list = await readAll();
+    const idx = list.findIndex(e => e.id === id);
+    if (idx === -1) return null;
+    const updated: DiaryEntry = { ...list[idx], ...patch };
+    list[idx] = updated;
+    await writeAll(list);
+    return updated;
+  } catch (e) {
+    console.warn('[diaryStorage] 업데이트 실패:', e);
+    throw new Error('일기를 수정하지 못했어요.');
+  }
 };
 
 /** ID로 삭제. */

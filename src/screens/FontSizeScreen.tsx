@@ -29,8 +29,9 @@ const FontSizeScreen: React.FC<FontSizeScreenProps> = ({ navigation }) => {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.backTouch}
         >
-          <Text style={styles.backBtn}>←</Text>
+          <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>글씨 크기</Text>
         <View style={styles.headerSpacer} />
@@ -95,11 +96,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
   },
-  backBtn: {
-    fontSize: 28,
-    color: '#2C2A28',
+  backTouch: {
     width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtn: {
+    fontSize: 30,
+    color: '#2C2A28',
     fontWeight: '300',
+    lineHeight: 32,
   },
   headerTitle: {
     fontWeight: '700',

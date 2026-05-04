@@ -59,6 +59,95 @@ const buildUserMessage = (input: GenerateAIDraftInput): string => {
  *  - Error('OPENROUTER_API_KEY 미설정') — .env에 키 없음
  *  - Error(서버 에러 메시지) — API 호출 실패 / 빈 응답
  */
+const FINAL_SYSTEM_PROMPT = [
+  '너는 70대 어르신을 모시는 10대 다정하고 섬세한 손주야.',
+  '말투는 경어체이고, 어르신의 하루 전체를 따뜻하게 마무리하는 분위기여야 해.',
+  '입력으로 받는 것은 [오늘의 최종 기분]과 [오늘 동안 어르신이 작성한 일기 조각들]이야.',
+  '이 조각들을 자연스럽게 엮어 하루를 마무리하는 5~7문장 분량의 종합 일기를 써줘.',
+  '시간 흐름을 살짝 의식하되 너무 딱딱한 시간순 나열은 피하고, 감정의 흐름을 더 중요하게 다뤄.',
+  '결과는 따로 머리말이나 인용부호 없이 일기 본문만 출력해.',
+].join(' ');
+
+export interface GenerateFinalDraftInput {
+  /** 최종 기분의 라벨 (예: "평온해요"). null이면 기분 없이 작성. */
+  moodLabel: string | null;
+  /**
+   * 오늘 작성된 일반 일기들의 본문 모음. 시간 순(이른→늦은)으로 정렬해 넣을 것.
+   * 한 일기당 한 항목.
+   */
+  diarySnippets: string[];
+}
+
+const buildFinalUserMessage = (input: GenerateFinalDraftInput): string => {
+  const lines: string[] = [];
+  lines.push(`최종 기분: ${input.moodLabel ?? '선택 안 함'}`);
+  if (input.diarySnippets.length === 0) {
+    lines.push('오늘 작성한 일기 조각: (없음 — 자유롭게 따뜻한 마무리 멘트만 작성)');
+  } else {
+    lines.push('오늘 작성한 일기 조각:');
+    input.diarySnippets.forEach((snippet, idx) => {
+      lines.push(`[${idx + 1}] ${snippet}`);
+    });
+  }
+  return lines.join('\n');
+};
+
+/**
+ * 하루치 일반 일기들을 종합해서 최종 일기 초안을 만든다.
+ * 일반 generateAIDraft와 시스템 프롬프트가 다름 (시간 흐름 + 종합 톤).
+ */
+export const generateFinalAIDraft = async (
+  input: GenerateFinalDraftInput,
+): Promise<string> => {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error(
+      'OPENROUTER_API_KEY가 .env에 설정되지 않았습니다. (Metro 재시작 필요)',
+    );
+  }
+
+  console.log('[FinalAI] 입력:', input);
+
+  try {
+    const { data } = await axios.post<OpenRouterChatCompletionResponse>(
+      ENDPOINT,
+      {
+        model: MODEL,
+        messages: [
+          { role: 'system', content: FINAL_SYSTEM_PROMPT },
+          { role: 'user', content: buildFinalUserMessage(input) },
+        ],
+        temperature: 0.8,
+        max_tokens: 1500,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://memora.app',
+          'X-Title': 'Memora',
+        },
+        timeout: 30000,
+      },
+    );
+
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      throw new Error('AI가 빈 응답을 반환했어요.');
+    }
+    return content;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      const err = e as AxiosError<OpenRouterErrorPayload>;
+      const apiMsg = err.response?.data?.error?.message;
+      const status = err.response?.status;
+      throw new Error(
+        apiMsg ?? `OpenRouter 호출 실패 (status ${status ?? 'unknown'})`,
+      );
+    }
+    throw e;
+  }
+};
+
 export const generateAIDraft = async (
   input: GenerateAIDraftInput,
 ): Promise<string> => {
