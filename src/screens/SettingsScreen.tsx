@@ -159,6 +159,21 @@ const SettingsScreen: React.FC = () => {
             <Text style={[styles.logoutText, { fontSize: scale(15) }]}>로그아웃</Text>
           </TouchableOpacity>
         </View>
+
+        {/* 임시 — Phase 1 검증 후 제거 */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { fontSize: scale(13) }]}>개발자</Text>
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => navigation.navigate('ApiTest')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>
+              API 테스트 (임시)
+            </Text>
+            <Text style={styles.actionArrow}>›</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* 비상 연락처 수정 모달 */}

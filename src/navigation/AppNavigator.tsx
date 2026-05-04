@@ -34,6 +34,8 @@ import ProfileEditScreen from '../screens/ProfileEditScreen';
 
 import FontSizeScreen from '../screens/FontSizeScreen';
 
+import ApiTestScreen from '../screens/ApiTestScreen';
+
 /**
  * ─────────────────────────────────────────────
  *  1) 인증 Stack
@@ -147,10 +149,12 @@ export type SettingsStackParamList = {
   SettingsMain: undefined;
   ProfileEdit: undefined;
   FontSize: undefined;
+  ApiTest: undefined;
 };
 
 export type ProfileEditScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ProfileEdit'>;
 export type FontSizeScreenProps = NativeStackScreenProps<SettingsStackParamList, 'FontSize'>;
+export type ApiTestScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ApiTest'>;
 
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
@@ -166,6 +170,7 @@ const SettingsStackNavigator = () => {
       <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileEdit" component={ProfileEditScreen} />
       <SettingsStack.Screen name="FontSize" component={FontSizeScreen} />
+      <SettingsStack.Screen name="ApiTest" component={ApiTestScreen} />
     </SettingsStack.Navigator>
   );
 };
