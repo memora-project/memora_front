@@ -17,10 +17,12 @@ import Icon from 'react-native-vector-icons/Ionicons';
 // 일기 흐름 화면들
 import HomeScreen from '../screens/HomeScreen';
 import MidDiaryScreen from '../screens/MidDiaryScreen';
+import FinalDiaryScreen from '../screens/FinalDiaryScreen';
 import DetailScreen from '../screens/DetailScreen';
 
 // 탭 화면들
 import DiaryListScreen from '../screens/DiaryListScreen';
+import DateDetailScreen from '../screens/DateDetailScreen';
 import ReportScreen from '../screens/ReportScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
@@ -34,6 +36,8 @@ import { useAuth } from '../contexts/AuthContext';
 import ProfileEditScreen from '../screens/ProfileEditScreen';
 
 import FontSizeScreen from '../screens/FontSizeScreen';
+
+import GrandchildPhotoScreen from '../screens/GrandchildPhotoScreen';
 
 /**
  * ─────────────────────────────────────────────
@@ -73,11 +77,13 @@ const AuthStackNavigator: React.FC = () => {
 export type DiaryStackParamList = {
   Home: undefined;
   MidDiary: undefined;
+  FinalDiary: undefined;
   Detail: { diaryId: number };
 };
 
 export type HomeScreenProps = NativeStackScreenProps<DiaryStackParamList, 'Home'>;
 export type MidDiaryScreenProps = NativeStackScreenProps<DiaryStackParamList, 'MidDiary'>;
+export type FinalDiaryScreenProps = NativeStackScreenProps<DiaryStackParamList, 'FinalDiary'>;
 export type DetailScreenProps = NativeStackScreenProps<DiaryStackParamList, 'Detail'>;
 
 const DiaryStack = createNativeStackNavigator<DiaryStackParamList>();
@@ -97,8 +103,43 @@ const DiaryStackNavigator = () => {
         component={MidDiaryScreen}
         options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
       />
+      <DiaryStack.Screen
+        name="FinalDiary"
+        component={FinalDiaryScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
       <DiaryStack.Screen name="Detail" component={DetailScreen} />
     </DiaryStack.Navigator>
+  );
+};
+
+/**
+ * ─────────────────────────────────────────────
+ *  2-1) 일기 목록 탭 안의 Stack (캘린더 → 날짜별 상세)
+ * ─────────────────────────────────────────────
+ */
+export type DiaryListStackParamList = {
+  DiaryListMain: undefined;
+  DateDetail: { date: string };
+};
+
+export type DiaryListMainScreenProps = NativeStackScreenProps<DiaryListStackParamList, 'DiaryListMain'>;
+export type DateDetailScreenProps = NativeStackScreenProps<DiaryListStackParamList, 'DateDetail'>;
+
+const DiaryListStack = createNativeStackNavigator<DiaryListStackParamList>();
+
+const DiaryListStackNavigator = () => {
+  return (
+    <DiaryListStack.Navigator
+      initialRouteName="DiaryListMain"
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: '#FAF8F5' },
+      }}
+    >
+      <DiaryListStack.Screen name="DiaryListMain" component={DiaryListScreen} />
+      <DiaryListStack.Screen name="DateDetail" component={DateDetailScreen} />
+    </DiaryListStack.Navigator>
   );
 };
 
@@ -111,10 +152,12 @@ export type SettingsStackParamList = {
   SettingsMain: undefined;
   ProfileEdit: undefined;
   FontSize: undefined;
+  GrandchildPhoto: undefined;
 };
 
 export type ProfileEditScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ProfileEdit'>;
 export type FontSizeScreenProps = NativeStackScreenProps<SettingsStackParamList, 'FontSize'>;
+export type GrandchildPhotoScreenProps = NativeStackScreenProps<SettingsStackParamList, 'GrandchildPhoto'>;
 
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
@@ -130,6 +173,7 @@ const SettingsStackNavigator = () => {
       <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileEdit" component={ProfileEditScreen} />
       <SettingsStack.Screen name="FontSize" component={FontSizeScreen} />
+      <SettingsStack.Screen name="GrandchildPhoto" component={GrandchildPhotoScreen} />
     </SettingsStack.Navigator>
   );
 };
@@ -148,7 +192,6 @@ export type RootTabParamList = {
   Settings: NavigatorScreenParams<SettingsStackParamList>;
 };
 
-export type DiaryListScreenProps = BottomTabScreenProps<RootTabParamList, 'DiaryList'>;
 export type ReportScreenProps = BottomTabScreenProps<RootTabParamList, 'Report'>;
 export type SettingsScreenProps = BottomTabScreenProps<RootTabParamList, 'Settings'>;
 
@@ -183,7 +226,7 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="DiaryList"
-        component={DiaryListScreen}
+        component={DiaryListStackNavigator}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Icon name="book-outline" size={28} color={color} />
