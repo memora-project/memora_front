@@ -14,6 +14,8 @@ export interface UserProfile {
   emergencyContact: string | null;
   isReportShared: boolean;
   isKakaoUser: boolean;
+  /** ISO-8601 OffsetDateTime — 가입일시 */
+  createdAt: string;
 }
 
 export interface UpdateProfileRequest {

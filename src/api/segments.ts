@@ -14,30 +14,63 @@ import type { MoodType } from '../constants/moods';
  *   - 편집 시점:  사용자가 다듬은 본문 (생성 시 메모를 덮어씀)
  */
 
+/** 응답에서 받는 사진 한 장의 메타. photoOrder 오름차순으로 정렬되어 옴. */
+export interface SegmentPhotoResponse {
+  photoId: number | null;
+  photoOrder: number;
+  photoUrl: string;
+  /** ISO 8601. */
+  takenAt: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string | null;
+  createdAt: string | null;
+}
+
+/** 요청에서 보내는 사진 한 장의 메타. photoUrl 필수 — /files/images로 업로드한 결과 url. */
+export interface SegmentPhotoRequest {
+  photoUrl: string;
+  /** ISO 8601 (OffsetDateTime). */
+  takenAt?: string;
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+}
+
 export interface SegmentResponse {
   segmentId: number;
   stepOrder: number;
   moodSnapshot: MoodType;
+
+  /** 첫 번째 사진의 url (호환용 mirror). 다중 사진 클라이언트는 photos 사용. */
   photoUrl: string | null;
   /** ISO 8601. */
   takenAt: string | null;
   latitude: number | null;
   longitude: number | null;
   locationName: string | null;
+
   aiDraft: string | null;
   userContent: string | null;
   isEdited: boolean;
   createdAt: string;
+
+  /** 첨부된 모든 사진. 비어있을 수 있음. */
+  photos: SegmentPhotoResponse[];
 }
 
 export interface SegmentCreateRequest {
   moodSnapshot: MoodType;
+  /** 다중 사진. 비어있으면 단일 photoUrl 경로로 폴백. */
+  photos?: SegmentPhotoRequest[];
+
+  // 단일 사진 호환 경로 — 새 코드는 photos 사용.
   photoUrl?: string;
-  /** ISO 8601 (OffsetDateTime). */
   takenAt?: string;
   latitude?: number;
   longitude?: number;
   locationName?: string;
+
   /** 한 줄 메모. AI 초안 생성 품질에 직접 영향. */
   userContent?: string;
 }

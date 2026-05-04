@@ -13,6 +13,7 @@ import {
   Permission,
   Linking,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -22,14 +23,14 @@ import ImagePicker, {
 import Geolocation from '@react-native-community/geolocation';
 
 import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
-import { pickImageWithExif } from '../native/PhotoExif';
 import { createTodayDiary } from '../api/diaries';
 import {
   createSegment,
   generateSegmentAiDraft,
   updateSegment,
+  type SegmentPhotoRequest,
 } from '../api/segments';
-import { uploadImage } from '../api/files';
+import { uploadImages } from '../api/files';
 import { moodKeyToServer } from '../utils/moodMapper';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -228,7 +229,8 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
-  const [photoMetadata, setPhotoMetadata] = useState<PhotoMetadata | null>(null);
+  // 다중 사진 — 카메라는 한 번에 1장씩 누적, 갤러리는 multiple로 한 번에 N장.
+  const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
   const [shortMemo, setShortMemo] = useState<string>('');
   const [diaryText, setDiaryText] = useState<string>('');
   const [originalAiDraft, setOriginalAiDraft] = useState<string>('');
@@ -255,41 +257,48 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
 
   /**
    * step 2 → step 3 전환 흐름:
-   *   1) 사진 있으면 백엔드에 업로드 → photoUrl 받기
+   *   1) 첨부된 사진들을 병렬 업로드 → 각 url 받기
    *   2) 오늘 일기 확보 (이미 있으면 그 ID 반환)
-   *   3) Segment 생성 (mood + photoUrl + 위치 + takenAt + 한 줄 메모)
+   *   3) Segment 생성 (mood + photos[] + 한 줄 메모)
    * 이미 segmentId가 있으면(step3에서 뒤로 갔다가 다시 다음) 그냥 step만 전환.
-   *
-   * @param overrideMeta — undefined면 photoMetadata 사용, null이면 사진 없음 명시.
    */
-  const proceedToStep3 = async (
-    overrideMeta?: PhotoMetadata | null,
-  ): Promise<void> => {
+  const proceedToStep3 = async (): Promise<void> => {
     if (!selectedMood) return;
     if (segmentId !== null) {
       setStep(3);
       return;
     }
-    const meta = overrideMeta !== undefined ? overrideMeta : photoMetadata;
     setIsProceeding(true);
     try {
-      let photoUrl: string | null = null;
-      if (meta?.uri) {
-        photoUrl = await uploadImage(meta.uri);
-      }
+      // 1) 사진 N장 병렬 업로드
+      const urls =
+        photos.length > 0
+          ? await uploadImages(photos.map(p => p.uri))
+          : [];
+
+      // 2) 업로드 결과 url과 EXIF 메타를 결합해 SegmentPhotoRequest 배열 구성
+      const photosPayload: SegmentPhotoRequest[] = urls.map((url, idx) => {
+        const meta = photos[idx];
+        const locName =
+          meta?.locationLabel && meta.locationLabel !== NO_LOCATION_LABEL
+            ? meta.locationLabel
+            : undefined;
+        return {
+          photoUrl: url,
+          takenAt: toIsoOffset(meta?.takenAt ?? null) ?? undefined,
+          latitude: meta?.latitude ?? undefined,
+          longitude: meta?.longitude ?? undefined,
+          locationName: locName,
+        };
+      });
+
+      // 3) 일기 + segment 생성
       const diary = await createTodayDiary();
       setDiaryId(diary.diaryId);
 
       const segment = await createSegment(diary.diaryId, {
         moodSnapshot: moodKeyToServer(selectedMood.key as any),
-        photoUrl: photoUrl ?? undefined,
-        takenAt: toIsoOffset(meta?.takenAt ?? null) ?? undefined,
-        latitude: meta?.latitude ?? undefined,
-        longitude: meta?.longitude ?? undefined,
-        locationName:
-          meta?.locationLabel && meta.locationLabel !== NO_LOCATION_LABEL
-            ? meta.locationLabel
-            : undefined,
+        photos: photosPayload.length > 0 ? photosPayload : undefined,
         userContent: shortMemo.trim() || undefined,
       });
       setSegmentId(segment.segmentId);
@@ -416,20 +425,35 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     };
   };
 
-  const handlePhotoPick = async (source: 'camera' | 'gallery' | 'skip') => {
-    if (source === 'skip') {
-      setPhotoMetadata(null);
-      // 사진 없이 곧장 step 3 흐름 — proceedToStep3 안에서 createTodayDiary + createSegment.
-      void proceedToStep3(null);
-      return;
+  /**
+   * 단일 PickerImage → PhotoMetadata 변환 + EXIF에 GPS 없으면 device 좌표 fallback.
+   */
+  const pickerImageToMetadata = async (
+    image: PickerImage,
+  ): Promise<PhotoMetadata> => {
+    let metadata = extractExif(image);
+    if (metadata.locationSource === 'none') {
+      const deviceCoords = await getDeviceLocation();
+      if (deviceCoords) {
+        metadata = {
+          ...metadata,
+          latitude: deviceCoords.latitude,
+          longitude: deviceCoords.longitude,
+          locationLabel: `${deviceCoords.latitude.toFixed(
+            4,
+          )}, ${deviceCoords.longitude.toFixed(4)} (작성 위치)`,
+          locationSource: 'device',
+        };
+      }
     }
+    return metadata;
+  };
 
+  const handlePhotoPick = async (source: 'camera' | 'gallery') => {
     setIsPickingPhoto(true);
     try {
-      // 1) Android 권한 선체크/요청 (iOS는 자동으로 true)
+      // 1) Android 권한 선체크/요청
       const permission = await requestPhotoPermissions(source);
-      console.log('[Permission] result:', permission);
-
       if (!permission.canPickPhoto) {
         Alert.alert(
           '권한이 필요해요',
@@ -443,125 +467,45 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         );
         return;
       }
-
       if (!permission.canReadGps) {
-        // 핵심 권한은 있지만 GPS EXIF를 읽지 못함 → 진행은 하되 사용자에게 안내
-        console.warn(
-          'ACCESS_MEDIA_LOCATION이 거부되어 사진의 위치 정보를 읽을 수 없습니다.',
-        );
+        console.warn('ACCESS_MEDIA_LOCATION 거부 — 사진 GPS EXIF는 못 읽고 device 좌표로 fallback.');
       }
 
-      // 2) Picker 호출
-      // - Android 갤러리: 자체 네이티브 모듈 사용 (GPS 보존, ACTION_PICK + setRequireOriginal)
-      // - 그 외 (iOS 갤러리 / 카메라 양쪽): image-crop-picker
-      const useNativeAndroidPicker =
-        Platform.OS === 'android' && source === 'gallery';
-
-      let metadata: PhotoMetadata;
+      // 2) Picker 호출 — 갤러리는 multiple로 N장, 카메라는 1장
       try {
-        if (useNativeAndroidPicker) {
-          const result = await pickImageWithExif();
-          console.log('[NativePicker] result:', result);
-
-          // 썸네일 우선 노출
-          setPhotoMetadata({
-            uri: result.uri,
-            takenAt: null,
-            latitude: null,
-            longitude: null,
-            locationLabel: NO_LOCATION_LABEL,
-            locationSource: 'none',
+        if (source === 'camera') {
+          const image = await ImagePicker.openCamera({
+            mediaType: 'photo',
+            includeExif: true,
+            cropping: false,
           });
-
-          const takenAt = result.takenAt
-            ? result.takenAt.replace(/^(\d{4}):(\d{2}):(\d{2}) /, '$1-$2-$3T')
-            : null;
-          const hasPhotoGps =
-            result.latitude !== null && result.longitude !== null;
-          const locationLabel = hasPhotoGps
-            ? `${result.latitude!.toFixed(4)}, ${result.longitude!.toFixed(4)}`
-            : NO_LOCATION_LABEL;
-
-          metadata = {
-            uri: result.uri,
-            takenAt,
-            latitude: result.latitude,
-            longitude: result.longitude,
-            locationLabel,
-            locationSource: hasPhotoGps ? 'photo' : 'none',
-          };
+          const meta = await pickerImageToMetadata(image);
+          setPhotos(prev => [...prev, meta]);
         } else {
-          const image: PickerImage =
-            source === 'camera'
-              ? await ImagePicker.openCamera({
-                  mediaType: 'photo',
-                  includeExif: true,
-                  cropping: false,
-                })
-              : await ImagePicker.openPicker({
-                  mediaType: 'photo',
-                  includeExif: true,
-                  cropping: false,
-                  multiple: false,
-                });
-          console.log('[ImagePicker] image:', image);
-
-          const tempUri = image.path.startsWith('file://')
-            ? image.path
-            : `file://${image.path}`;
-          setPhotoMetadata({
-            uri: tempUri,
-            takenAt: null,
-            latitude: null,
-            longitude: null,
-            locationLabel: NO_LOCATION_LABEL,
-            locationSource: 'none',
+          const result = await ImagePicker.openPicker({
+            mediaType: 'photo',
+            includeExif: true,
+            cropping: false,
+            multiple: true,
           });
-
-          metadata = extractExif(image);
-        }
-
-        // 사진 EXIF에 GPS가 없으면 디바이스 현재 위치로 fallback
-        // (도메인 정책: 동선 분석을 위해 어떤 좌표든 확보. 출처는 metadata.locationSource로 구분)
-        if (metadata.locationSource === 'none') {
-          console.log('[Location] EXIF에 GPS 없음 → 디바이스 위치 fallback 시도');
-          const deviceCoords = await getDeviceLocation();
-          if (deviceCoords) {
-            metadata = {
-              ...metadata,
-              latitude: deviceCoords.latitude,
-              longitude: deviceCoords.longitude,
-              locationLabel: `${deviceCoords.latitude.toFixed(
-                4,
-              )}, ${deviceCoords.longitude.toFixed(4)} (작성 위치)`,
-              locationSource: 'device',
-            };
-          }
+          const list = Array.isArray(result) ? result : [result];
+          const metas = await Promise.all(list.map(pickerImageToMetadata));
+          setPhotos(prev => [...prev, ...metas]);
         }
       } catch (e: any) {
         if (e?.code === 'E_PICKER_CANCELLED') {
-          return; // 사용자 취소: 조용히 종료
+          return;
         }
         Alert.alert('사진을 불러올 수 없어요', e?.message ?? '');
         return;
       }
-
-      console.log('[EXIF] extracted metadata:', {
-        takenAt: metadata.takenAt,
-        latitude: metadata.latitude,
-        longitude: metadata.longitude,
-        locationLabel: metadata.locationLabel,
-        locationSource: metadata.locationSource,
-        hasTime: metadata.takenAt !== null,
-        hasLocation:
-          metadata.latitude !== null && metadata.longitude !== null,
-      });
-
-      setPhotoMetadata(metadata);
-      // 사진/메타데이터만 세팅하고 step은 그대로 — 사용자가 한 줄 메모 입력 후 "다음" 버튼으로 진행
     } finally {
       setIsPickingPhoto(false);
     }
+  };
+
+  const removePhotoAt = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -602,6 +546,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     setSegmentId(null);
     setDiaryText('');
     setOriginalAiDraft('');
+    setPhotos([]);
     setStep(1);
   };
 
@@ -681,26 +626,35 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     <View style={styles.stepContainer}>
       <Text style={[styles.title, { fontSize: scale(26) }]}>오늘의 한 장면</Text>
       <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
-        마음에 남은 사진이 있다면 함께 담아보세요
+        여러 장도 괜찮아요. 마음에 남은 사진을 담아보세요
       </Text>
 
-      {photoMetadata?.uri ? (
-        <View style={styles.thumbnailWrap}>
-          <Image
-            source={{ uri: photoMetadata.uri }}
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
-          {isPickingPhoto && (
-            <View style={styles.thumbnailOverlay}>
-              <ActivityIndicator color="#FFFFFF" />
-              <Text style={[styles.thumbnailOverlayText, { fontSize: scale(13) }]}>
-                메타데이터 추출 중...
-              </Text>
+      {photos.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.thumbStripContent}
+          style={styles.thumbStrip}
+        >
+          {photos.map((p, idx) => (
+            <View key={`${p.uri}-${idx}`} style={styles.thumbItem}>
+              <Image
+                source={{ uri: p.uri }}
+                style={styles.thumbImage}
+                resizeMode="cover"
+              />
+              <TouchableOpacity
+                style={styles.thumbRemove}
+                onPress={() => removePhotoAt(idx)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.thumbRemoveText}>×</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-      ) : null}
+          ))}
+        </ScrollView>
+      )}
 
       <View style={styles.photoActions}>
         <TouchableOpacity
@@ -724,7 +678,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {isPickingPhoto && !photoMetadata?.uri && (
+      {isPickingPhoto && (
         <ActivityIndicator
           style={{ marginTop: 16 }}
           color="#2C2A28"
@@ -756,10 +710,10 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         <TouchableOpacity
           style={styles.skipInlineButton}
           disabled={isPickingPhoto || isProceeding}
-          onPress={() => handlePhotoPick('skip')}
+          onPress={() => proceedToStep3()}
         >
           <Text style={[styles.skipText, { fontSize: scale(14) }]}>
-            사진 선택 안 함
+            {photos.length === 0 ? '사진 없이 진행' : '사진 모두 지우고 진행'}
           </Text>
         </TouchableOpacity>
 
@@ -789,12 +743,22 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         마음에 들면 그대로, 아니라면 자유롭게 고쳐주세요
       </Text>
 
-      {photoMetadata?.uri && (
-        <Image
-          source={{ uri: photoMetadata.uri }}
-          style={styles.previewPhoto}
-          resizeMode="cover"
-        />
+      {photos.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.previewStripContent}
+          style={styles.previewStrip}
+        >
+          {photos.map((p, idx) => (
+            <Image
+              key={`preview-${idx}`}
+              source={{ uri: p.uri }}
+              style={styles.previewPhoto}
+              resizeMode="cover"
+            />
+          ))}
+        </ScrollView>
       )}
 
       {isGenerating ? (
@@ -850,7 +814,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       {renderTopBar()}
       <KeyboardAwareScrollView
         contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         extraScrollHeight={24}
@@ -1044,29 +1008,46 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     lineHeight: 18,
   },
-  thumbnailWrap: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#EFEAE3',
+  thumbStrip: {
     marginBottom: 16,
   },
-  thumbnail: {
+  thumbStripContent: {
+    gap: 10,
+    paddingRight: 8,
+  },
+  thumbItem: {
+    width: 110,
+    height: 110,
+    borderRadius: 14,
+    overflow: 'visible',
+    backgroundColor: '#EFEAE3',
+  },
+  thumbImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 14,
   },
-  thumbnailOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+  thumbRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2C2A28',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
   },
-  thumbnailOverlayText: {
-    marginTop: 8,
+  thumbRemoveText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 18,
   },
   photoActions: {
     flexDirection: 'row',
@@ -1148,11 +1129,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  previewStrip: {
+    marginBottom: 16,
+  },
+  previewStripContent: {
+    gap: 10,
+    paddingRight: 8,
+  },
   previewPhoto: {
-    width: '100%',
+    width: 220,
     height: 160,
     borderRadius: 14,
-    marginBottom: 16,
     backgroundColor: '#EFEAE3',
   },
   loadingBox: {

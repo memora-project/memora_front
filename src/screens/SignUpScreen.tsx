@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import DistrictPicker from '../components/DistrictPicker';
 import BirthdatePicker from '../components/BirthdatePicker';
@@ -103,15 +102,8 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       };
 
       const tokens = await apiSignup(request);
-      // 백엔드 /users/me 응답에 created_at이 아직 없어서, 신규 가입 시점을 로컬에 기록.
-      // AuthContext.login이 이후에 AsyncStorage에서 읽어 state로 끌어올림.
-      // 키는 AuthContext의 STORAGE_KEYS.USER_CREATED_AT과 일치해야 함.
-      await AsyncStorage.setItem(
-        '@memora:user_created_at',
-        new Date().toISOString(),
-      );
-      // 자동 로그인 — AuthContext.login이 토큰을 저장하고 isLoggedIn=true로 만들면
-      // AppNavigator가 메인 탭으로 자동 전환됨
+      // 자동 로그인 — AuthContext.login이 /users/me 호출하여 createdAt 포함한
+      // 프로필 전체를 AsyncStorage + state로 채워 넣음.
       await authLogin(trimmedEmail, tokens.accessToken, tokens.refreshToken);
     } catch (error: unknown) {
       const message =

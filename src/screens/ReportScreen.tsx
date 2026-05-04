@@ -1,29 +1,91 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
-import { getDummyWeeklyReport, getDummyMonthlyReport } from '../utils/reportDummyData';
-import { MOOD_INFO } from '../constants/moods';
+import {
+  getWeeklyReport,
+  getMonthlyReport,
+  type ReportResponse,
+} from '../api/reports';
+import { MOOD_INFO, MOOD_ORDER, type MoodType } from '../constants/moods';
 import MoodBarChart from '../components/MoodBarChart';
 
 type Period = 'weekly' | 'monthly';
 
+type MoodDistributionRow = {
+  type: MoodType;
+  count: number;
+  percent: number;
+};
+
+/** 백엔드 Map<String, Long> → 차트 컴포넌트가 받는 배열 + percent 계산. */
+const toDistributionRows = (
+  raw: Record<string, number>,
+): MoodDistributionRow[] => {
+  const total = MOOD_ORDER.reduce((sum, key) => sum + (raw[key] ?? 0), 0);
+  return MOOD_ORDER.map(type => {
+    const count = raw[type] ?? 0;
+    const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+    return { type, count, percent };
+  });
+};
+
+const formatDateRange = (start: string, end: string): string => {
+  const [, sm, sd] = start.split('-');
+  const [, em, ed] = end.split('-');
+  return `${parseInt(sm, 10)}월 ${parseInt(sd, 10)}일 ~ ${parseInt(em, 10)}월 ${parseInt(ed, 10)}일`;
+};
+
 const ReportScreen: React.FC = () => {
   const { scale } = useSettings();
   const [period, setPeriod] = useState<Period>('weekly');
+  const [report, setReport] = useState<ReportResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const reportData = useMemo(
-    () => (period === 'weekly' ? getDummyWeeklyReport() : getDummyMonthlyReport()),
-    [period],
+  // period 변경 또는 화면 focus 시 다시 로드.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        setIsLoading(true);
+        setErrorMessage(null);
+        try {
+          const data =
+            period === 'weekly'
+              ? await getWeeklyReport()
+              : await getMonthlyReport();
+          if (!cancelled) setReport(data);
+        } catch (e: any) {
+          if (!cancelled) {
+            setReport(null);
+            setErrorMessage(e?.message ?? '리포트를 불러오지 못했습니다.');
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [period]),
   );
 
-  const formatDateRange = (start: string, end: string): string => {
-    const [, sm, sd] = start.split('-');
-    const [, em, ed] = end.split('-');
-    return `${parseInt(sm, 10)}월 ${parseInt(sd, 10)}일 ~ ${parseInt(em, 10)}월 ${parseInt(ed, 10)}일`;
-  };
+  const distribution = useMemo(
+    () => (report ? toDistributionRows(report.moodDistribution) : []),
+    [report],
+  );
 
-  const mostFrequent = MOOD_INFO[reportData.mostFrequentMood];
+  const mostFrequentInfo =
+    report && report.mostFrequentMood ? MOOD_INFO[report.mostFrequentMood] : null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -69,55 +131,70 @@ const ReportScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* 기간 라벨 */}
-        <Text style={[styles.dateRange, { fontSize: scale(13) }]}>
-          {formatDateRange(reportData.startDate, reportData.endDate)}
-        </Text>
-
-        {/* 요약 카드 */}
-        <View style={styles.summaryCard}>
-          <Text style={[styles.summaryLabel, { fontSize: scale(13) }]}>
-            가장 자주 느낀 마음
-          </Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryEmoji}>{mostFrequent.emoji}</Text>
-            <Text style={[styles.summaryMood, { fontSize: scale(22) }]}>
-              {mostFrequent.label}
-            </Text>
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color="#2C2A28" />
           </View>
-          <Text style={[styles.summarySub, { fontSize: scale(13) }]}>
-            총 {reportData.totalEntries}일의 일기를 작성하셨어요
-          </Text>
-        </View>
-
-        {/* 기분 분포 */}
-        <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { fontSize: scale(17) }]}>기분 분포</Text>
-        <View style={styles.chartCard}>
-            <MoodBarChart data={reportData.moodDistribution} />
-        </View>
-        </View>
-
-        {/* 활동 점수 (STEP 5에서 디자인) */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { fontSize: scale(17) }]}>활동 점수</Text>
+        ) : errorMessage ? (
           <View style={styles.placeholderCard}>
-            <Text style={[styles.scoreText, { fontSize: scale(36) }]}>
-              {reportData.activityScore}
-              <Text style={{ fontSize: scale(20), color: '#A09B95' }}> / 100</Text>
+            <Text style={[styles.placeholderText, { fontSize: scale(14) }]}>
+              {errorMessage}
             </Text>
           </View>
-        </View>
+        ) : report ? (
+          <>
+            {/* 기간 라벨 */}
+            <Text style={[styles.dateRange, { fontSize: scale(13) }]}>
+              {formatDateRange(report.startDate, report.endDate)}
+            </Text>
 
-        {/* AI 요약 */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { fontSize: scale(17) }]}>AI 분석</Text>
-          <View style={styles.aiCard}>
-            <Text style={[styles.aiSummary, { fontSize: scale(14) }]}>
-              {reportData.aiSummary}
-            </Text>
-          </View>
-        </View>
+            {/* 요약 카드 */}
+            <View style={styles.summaryCard}>
+              <Text style={[styles.summaryLabel, { fontSize: scale(13) }]}>
+                가장 자주 느낀 감정
+              </Text>
+              {mostFrequentInfo ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryEmoji}>{mostFrequentInfo.emoji}</Text>
+                  <Text style={[styles.summaryMood, { fontSize: scale(22) }]}>
+                    {mostFrequentInfo.label}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.summaryEmptyText, { fontSize: scale(15) }]}>
+                  아직 마무리한 일기가 없어요
+                </Text>
+              )}
+              <Text style={[styles.summarySub, { fontSize: scale(13) }]}>
+                총 {report.totalDiaries}개의 일기를 작성하셨어요
+              </Text>
+            </View>
+
+            {/* 기분 분포 */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { fontSize: scale(17) }]}>
+                기분 분포
+              </Text>
+              <View style={styles.chartCard}>
+                <MoodBarChart data={distribution} />
+              </View>
+            </View>
+
+            {/* AI 요약 */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { fontSize: scale(17) }]}>
+                AI 분석
+              </Text>
+              <View style={styles.aiCard}>
+                <Text style={[styles.aiSummary, { fontSize: scale(14) }]}>
+                  {report.aiAnalysisSummary && report.aiAnalysisSummary.length > 0
+                    ? report.aiAnalysisSummary
+                    : '아직 분석할 데이터가 충분하지 않아요. 일기를 더 작성해 주세요.'}
+                </Text>
+              </View>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -180,6 +257,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+  loadingWrap: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   // 요약 카드
   summaryCard: {
     backgroundColor: '#FFFFFF',
@@ -211,6 +294,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#2C2A28',
   },
+  summaryEmptyText: {
+    color: '#A09B95',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
   summarySub: {
     color: '#8A857F',
   },
@@ -240,11 +328,8 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     color: '#A09B95',
-  },
-
-  scoreText: {
-    fontWeight: '700',
-    color: '#2C2A28',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
   aiCard: {
@@ -270,7 +355,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 1,
-    },
+  },
 });
 
 export default ReportScreen;
