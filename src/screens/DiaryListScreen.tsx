@@ -44,11 +44,11 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
   const [yearMonthPickerVisible, setYearMonthPickerVisible] = useState(false);
 
   // currentMonth가 바뀌거나 화면 focus되면 그 달치 일기 fetch.
+  // 달 전환은 즉시 반영하고 데이터만 백그라운드에서 로드.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
-        setIsLoading(true);
         try {
           const ym = currentMonth.slice(0, 7); // 'YYYY-MM'
           const list = await getDiariesByMonth(ym);
@@ -79,14 +79,19 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
 
   const goToPrevMonth = () => {
     const [y, m] = currentMonth.split('-').map(Number);
-    const prev = new Date(y, m - 2, 1);
-    setCurrentMonth(prev.toISOString().slice(0, 10));
+    const prev = m - 1 < 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+    setCurrentMonth(prev);
   };
 
   const goToNextMonth = () => {
     const [y, m] = currentMonth.split('-').map(Number);
-    const next = new Date(y, m, 1);
-    setCurrentMonth(next.toISOString().slice(0, 10));
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthNum = now.getMonth() + 1;
+    // 현재 달까지만 이동 가능
+    if (y > currentYear || (y === currentYear && m >= currentMonthNum)) return;
+    const next = m + 1 > 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    setCurrentMonth(next);
   };
 
   const handleYearMonthSelect = (newDate: string) => {
@@ -141,7 +146,6 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
             </View>
 
             <Calendar
-              key={currentMonth}
               current={currentMonth}
               hideArrows={true}
               renderHeader={() => null}
