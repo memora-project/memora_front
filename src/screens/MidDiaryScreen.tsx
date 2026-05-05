@@ -299,7 +299,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
    * react-native-image-crop-picker가 picker 결과에 직접 실어주는 `.exif`에서
    * 시간/위도/경도를 파싱한다. (Android는 평탄 키, iOS는 GPS 서브 객체로 옴)
    */
-  const extractExif = (image: PickerImage): PhotoMetadata => {
+  const extractExif = async (image: PickerImage): Promise<PhotoMetadata> => {
     const uri = image.path.startsWith('file://')
       ? image.path
       : `file://${image.path}`;
@@ -349,9 +349,24 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     }
 
     const hasPhotoGps = latitude !== null && longitude !== null;
-    const locationLabel = hasPhotoGps
-      ? `${latitude!.toFixed(4)}, ${longitude!.toFixed(4)}`
-      : NO_LOCATION_LABEL;
+    let locationLabel = NO_LOCATION_LABEL;
+
+    if (hasPhotoGps) {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=ko`,
+          { headers: { 'User-Agent': 'Memora/1.0' } },
+        );
+        const geo = await res.json();
+        const addr = geo.address;
+        // 동(neighbourhood/quarter) > 구(city_district) 순으로 표시
+        const dong = addr?.neighbourhood || addr?.quarter || addr?.suburb || '';
+        const gu = addr?.city_district || addr?.county || '';
+        locationLabel = dong ? `${gu} ${dong}`.trim() : gu || `${latitude!.toFixed(4)}, ${longitude!.toFixed(4)}`;
+      } catch {
+        locationLabel = `${latitude!.toFixed(4)}, ${longitude!.toFixed(4)}`;
+      }
+    }
 
     return {
       uri,
@@ -423,9 +438,23 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
             : null;
           const hasPhotoGps =
             result.latitude !== null && result.longitude !== null;
-          const locationLabel = hasPhotoGps
-            ? `${result.latitude!.toFixed(4)}, ${result.longitude!.toFixed(4)}`
-            : NO_LOCATION_LABEL;
+
+          let locationLabel = NO_LOCATION_LABEL;
+          if (hasPhotoGps) {
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${result.latitude}&lon=${result.longitude}&format=json&accept-language=ko`,
+                { headers: { 'User-Agent': 'Memora/1.0' } },
+              );
+              const geo = await res.json();
+              const addr = geo.address;
+              const dong = addr?.neighbourhood || addr?.quarter || addr?.suburb || '';
+              const gu = addr?.city_district || addr?.county || '';
+              locationLabel = dong ? `${gu} ${dong}`.trim() : gu || `${result.latitude!.toFixed(4)}, ${result.longitude!.toFixed(4)}`;
+            } catch {
+              locationLabel = `${result.latitude!.toFixed(4)}, ${result.longitude!.toFixed(4)}`;
+            }
+          }
 
           metadata = {
             uri: result.uri,
@@ -463,7 +492,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
             locationSource: 'none',
           });
 
-          metadata = extractExif(image);
+          metadata = await extractExif(image);
         }
 
         // 사진 EXIF에 GPS가 없으면 디바이스 현재 위치로 fallback
@@ -472,13 +501,25 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           console.log('[Location] EXIF에 GPS 없음 → 디바이스 위치 fallback 시도');
           const deviceCoords = await getDeviceLocation();
           if (deviceCoords) {
+            let deviceLabel = `${deviceCoords.latitude.toFixed(4)}, ${deviceCoords.longitude.toFixed(4)}`;
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${deviceCoords.latitude}&lon=${deviceCoords.longitude}&format=json&accept-language=ko`,
+                { headers: { 'User-Agent': 'Memora/1.0' } },
+              );
+              const geo = await res.json();
+              const addr = geo.address;
+              const dong = addr?.neighbourhood || addr?.quarter || addr?.suburb || '';
+              const gu = addr?.city_district || addr?.county || '';
+              if (dong || gu) {
+                deviceLabel = dong ? `${gu} ${dong}`.trim() : gu;
+              }
+            } catch {}
             metadata = {
               ...metadata,
               latitude: deviceCoords.latitude,
               longitude: deviceCoords.longitude,
-              locationLabel: `${deviceCoords.latitude.toFixed(
-                4,
-              )}, ${deviceCoords.longitude.toFixed(4)} (작성 위치)`,
+              locationLabel: `${deviceLabel} (작성 위치)`,
               locationSource: 'device',
             };
           }
@@ -669,6 +710,12 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           )}
         </View>
       ) : null}
+
+      {photoMetadata?.locationLabel && (
+        <Text style={styles.locationText}>
+          📍 {photoMetadata.locationLabel}
+        </Text>
+      )}
 
       <View style={styles.photoActions}>
         <TouchableOpacity
@@ -913,6 +960,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '500',
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#8A857F',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   photoActions: {
     flexDirection: 'row',
