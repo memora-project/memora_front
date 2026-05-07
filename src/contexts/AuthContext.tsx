@@ -13,8 +13,9 @@ import {
   setOnAuthError,
   setOnTokenRefreshed,
 } from '../api/client';
+import messaging from '@react-native-firebase/messaging';
 import { logout as apiLogout } from '../api/auth';
-import { getMe, updateMe, type UserProfile } from '../api/users';
+import { getMe, updateMe, registerFcmToken, type UserProfile } from '../api/users';
 import type { Gender } from '../types/user';
 
 /**
@@ -207,6 +208,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } catch (e) {
           console.warn('백그라운드 프로필 갱신 실패 (캐시 사용):', e);
         }
+
+        // FCM 토큰 발급 및 백엔드 등록
+        try {
+          const authStatus = await messaging().requestPermission();
+          const enabled =
+            authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+            authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+          if (enabled) {
+            const fcmToken = await messaging().getToken();
+            if (fcmToken) {
+              await registerFcmToken(fcmToken);
+            }
+          }
+        } catch (e) {
+          console.warn('[FCM] 토큰 등록 실패:', e);
+        }
       }
     };
 
@@ -237,7 +254,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const profile = await getMe();
         await persistProfile(profile);
 
-        // 3. 모든 데이터 준비된 후에 로그인 상태 마킹
+        // 3. FCM 토큰 등록
+        try {
+          const fcmToken = await messaging().getToken();
+          if (fcmToken) {
+            await registerFcmToken(fcmToken);
+          }
+        } catch (e) {
+          console.warn('[FCM] 로그인 후 토큰 등록 실패:', e);
+        }
+
+        // 4. 모든 데이터 준비된 후에 로그인 상태 마킹
         setIsLoggedIn(true);
       } catch (error) {
         // 실패 시 토큰 롤백 — 부분적 로그인 상태 방지

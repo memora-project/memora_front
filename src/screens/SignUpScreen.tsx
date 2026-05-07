@@ -260,7 +260,16 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           <TextInput
             style={[styles.input, { fontSize: scale(17) }]}
             value={phoneNumber}
-            onChangeText={setPhoneNumber}
+            onChangeText={(text) => {
+              const digits = text.replace(/[^0-9]/g, '').slice(0, 11);
+              let formatted = digits;
+              if (digits.length > 7) {
+                formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+              } else if (digits.length > 3) {
+                formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+              }
+              setPhoneNumber(formatted);
+            }}
             placeholder="010-0000-0000"
             placeholderTextColor="#B5AFA8"
             keyboardType="phone-pad"
@@ -308,7 +317,16 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           <TextInput
             style={[styles.input, { fontSize: scale(17) }]}
             value={emergencyContact}
-            onChangeText={setEmergencyContact}
+            onChangeText={(text) => {
+              const digits = text.replace(/[^0-9]/g, '').slice(0, 11);
+              let formatted = digits;
+              if (digits.length > 7) {
+                formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+              } else if (digits.length > 3) {
+                formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+              }
+              setEmergencyContact(formatted);
+            }}
             placeholder="010-0000-0000"
             placeholderTextColor="#B5AFA8"
             keyboardType="phone-pad"
