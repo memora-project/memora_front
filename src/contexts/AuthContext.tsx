@@ -92,18 +92,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * 로그인 직후, 회원가입 직후, PATCH /users/me 직후 호출.
    */
   const persistProfile = useCallback(async (profile: UserProfile) => {
-    // emergencyContact는 nullable. null이면 키 제거, 값 있으면 저장.
+    // nullable 필드는 null이면 빈 문자열로 대체 (AsyncStorage는 null 불가).
     const emergencyContact = profile.emergencyContact ?? '';
     const grandchildPhoto = profile.grandchildPhotoUrl ?? '';
     await Promise.all([
-      AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, profile.loginId),
-      AsyncStorage.setItem(STORAGE_KEYS.USER_NAME, profile.name),
-      AsyncStorage.setItem(STORAGE_KEYS.USER_GENDER, profile.gender),
-      AsyncStorage.setItem(STORAGE_KEYS.USER_BIRTH_DATE, profile.birthDate),
-      AsyncStorage.setItem(STORAGE_KEYS.USER_ADDRESS, profile.address),
-      AsyncStorage.setItem(STORAGE_KEYS.USER_PHONE_NUMBER, profile.phoneNumber),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, profile.loginId ?? ''),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_NAME, profile.name ?? ''),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_GENDER, profile.gender ?? ''),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_BIRTH_DATE, profile.birthDate ?? ''),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_ADDRESS, profile.address ?? ''),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_PHONE_NUMBER, profile.phoneNumber ?? ''),
       AsyncStorage.setItem(STORAGE_KEYS.USER_EMERGENCY_CONTACT, emergencyContact),
-      AsyncStorage.setItem(STORAGE_KEYS.USER_CREATED_AT, profile.createdAt),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_CREATED_AT, profile.createdAt ?? ''),
       AsyncStorage.setItem(STORAGE_KEYS.USER_GRANDCHILD_PHOTO, grandchildPhoto),
     ]);
     setUserEmail(profile.loginId);
