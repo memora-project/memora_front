@@ -428,6 +428,22 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   /**
    * 단일 PickerImage → PhotoMetadata 변환 + EXIF에 GPS 없으면 device 좌표 fallback.
    */
+  const reverseGeocode = async (lat: number, lon: number): Promise<string | null> => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ko`,
+        { headers: { 'User-Agent': 'Memora/1.0' } },
+      );
+      const geo = await res.json();
+      const addr = geo.address;
+      const dong = addr?.neighbourhood || addr?.quarter || addr?.suburb || '';
+      const gu = addr?.city_district || addr?.county || '';
+      return dong ? `${gu} ${dong}`.trim() : gu || null;
+    } catch {
+      return null;
+    }
+  };
+
   const pickerImageToMetadata = async (
     image: PickerImage,
   ): Promise<PhotoMetadata> => {
@@ -435,15 +451,21 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     if (metadata.locationSource === 'none') {
       const deviceCoords = await getDeviceLocation();
       if (deviceCoords) {
+        const label = await reverseGeocode(deviceCoords.latitude, deviceCoords.longitude);
         metadata = {
           ...metadata,
           latitude: deviceCoords.latitude,
           longitude: deviceCoords.longitude,
-          locationLabel: `${deviceCoords.latitude.toFixed(
-            4,
-          )}, ${deviceCoords.longitude.toFixed(4)} (작성 위치)`,
+          locationLabel: label ? `${label} (작성 위치)` : `${deviceCoords.latitude.toFixed(4)}, ${deviceCoords.longitude.toFixed(4)} (작성 위치)`,
           locationSource: 'device',
         };
+      }
+    }
+    // EXIF GPS가 있으면 reverse geocoding으로 동 이름 변환
+    if (metadata.locationSource === 'photo' && metadata.latitude && metadata.longitude) {
+      const label = await reverseGeocode(metadata.latitude, metadata.longitude);
+      if (label) {
+        metadata = { ...metadata, locationLabel: label };
       }
     }
     return metadata;
@@ -654,6 +676,10 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
             </View>
           ))}
         </ScrollView>
+      )}
+
+      {photos.length > 0 && photos[0].locationLabel && photos[0].locationLabel !== NO_LOCATION_LABEL && (
+        <Text style={styles.locationText}>📍 {photos[0].locationLabel}</Text>
       )}
 
       <View style={styles.photoActions}>
@@ -1048,6 +1074,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 18,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#8A857F',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   photoActions: {
     flexDirection: 'row',

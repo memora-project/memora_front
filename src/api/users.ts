@@ -48,6 +48,18 @@ export const getMe = async (): Promise<UserProfile> => {
 /**
  * PATCH /users/me — 내 정보 수정. 보낸 필드만 부분 업데이트.
  */
+/**
+ * POST /users/me/fcm-token — FCM 토큰 등록.
+ * 앱 시작 시 로그인 상태면 호출하여 푸시 알림 수신 가능하도록 한다.
+ */
+export const registerFcmToken = async (fcmToken: string): Promise<void> => {
+  try {
+    await apiClient.post('/users/me/fcm-token', { fcmToken });
+  } catch (e) {
+    console.warn('[FCM] 토큰 등록 실패:', extractApiErrorMessage(e, ''));
+  }
+};
+
 export const updateMe = async (
   request: UpdateProfileRequest,
 ): Promise<UserProfile> => {
