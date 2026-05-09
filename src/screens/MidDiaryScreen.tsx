@@ -711,7 +711,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         </View>
       ) : null}
 
-      {photoMetadata?.locationLabel && (
+      {photoMetadata?.locationLabel && photoMetadata.locationLabel !== NO_LOCATION_LABEL && (
         <Text style={styles.locationText}>
           📍 {photoMetadata.locationLabel}
         </Text>
