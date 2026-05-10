@@ -7,6 +7,8 @@ import {
   FlatList,
   StyleSheet,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -15,18 +17,55 @@ import {
   GU_LIST,
   type District,
 } from '../constants/districts';
+import { lookupCurrentDistrict } from '../api/geo';
 
 type Props = {
   selectedValue: string;
   onSelect: (district: District) => void;
   placeholder?: string;
+  /** "내 위치로 자동 입력" 버튼 노출 여부. 기본 true. */
+  enableGps?: boolean;
 };
 
 const DistrictPicker: React.FC<Props> = ({
   selectedValue,
   onSelect,
   placeholder = '동네를 선택하세요',
+  enableGps = true,
 }) => {
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  const handleGpsPress = async () => {
+    if (gpsLoading) return;
+    setGpsLoading(true);
+    try {
+      const result = await lookupCurrentDistrict();
+      if (result.kind === 'success') {
+        onSelect(result.district);
+        return;
+      }
+      if (result.kind === 'permission_denied' || result.kind === 'no_coords') {
+        Alert.alert(
+          '위치를 가져오지 못했어요',
+          '위치 권한을 켠 뒤 다시 시도하거나, 직접 동네를 선택해 주세요.',
+        );
+        return;
+      }
+      if (result.kind === 'out_of_daejeon') {
+        Alert.alert(
+          '대전 외 지역인 것 같아요',
+          result.address
+            ? `현재 위치: ${result.address}\n\n앱은 대전 동네만 지원합니다. 직접 선택해 주세요.`
+            : '앱은 대전 동네만 지원합니다. 직접 선택해 주세요.',
+        );
+        return;
+      }
+      Alert.alert('오류', result.message);
+    } finally {
+      setGpsLoading(false);
+    }
+  };
+
   const [modalVisible, setModalVisible] = useState(false);
   // 'gu' = 구 선택 단계, 'dong' = 동 선택 단계
   const [step, setStep] = useState<'gu' | 'dong'>('gu');
@@ -104,6 +143,21 @@ const DistrictPicker: React.FC<Props> = ({
 
   return (
     <>
+      {enableGps && (
+        <TouchableOpacity
+          style={[styles.gpsBtn, gpsLoading && styles.gpsBtnDisabled]}
+          onPress={handleGpsPress}
+          activeOpacity={0.7}
+          disabled={gpsLoading}
+        >
+          {gpsLoading ? (
+            <ActivityIndicator size="small" color="#2C2A28" />
+          ) : (
+            <Text style={styles.gpsBtnText}>📍 내 위치로 자동 입력</Text>
+          )}
+        </TouchableOpacity>
+      )}
+
       {/* ── 트리거 (입력 필드처럼 보이는 버튼) ── */}
       <TouchableOpacity
         style={styles.trigger}
@@ -196,6 +250,28 @@ const DistrictPicker: React.FC<Props> = ({
 };
 
 const styles = StyleSheet.create({
+  // ── GPS 버튼 ──
+  gpsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E0DA',
+    backgroundColor: '#FFFFFF',
+    minHeight: 40,
+  },
+  gpsBtnDisabled: {
+    opacity: 0.6,
+  },
+  gpsBtnText: {
+    fontSize: 14,
+    color: '#2C2A28',
+    fontWeight: '500',
+  },
   // ── 트리거 ──
   trigger: {
     flexDirection: 'row',

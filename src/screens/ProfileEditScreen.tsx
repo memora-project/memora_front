@@ -61,15 +61,14 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
 
     try {
       setSaving(true);
-      // 본명/생년월일/주소/성별 PATCH (호칭은 별도 PATCH로 nickname 컬럼 갱신)
+      // 본명/생년월일/주소/성별 PATCH (호칭은 별도 PATCH로 honorific 컬럼 갱신)
       await updateProfile(name.trim(), birthDate, address, gender);
       await updateNickname(nickname);
       Alert.alert('저장 완료', '프로필이 수정되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : '알 수 없는 오류';
-      Alert.alert('오류', `프로필 저장 중 문제가 발생했습니다.\n\n${msg}`);
+    } catch {
+      Alert.alert('오류', '프로필 저장 중 문제가 발생했습니다.');
     } finally {
       setSaving(false);
     }
