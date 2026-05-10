@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   Modal,
   FlatList,
   StyleSheet,
   Platform,
 } from 'react-native';
+import { Text } from './AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = {

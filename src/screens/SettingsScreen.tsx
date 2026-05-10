@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Alert,
@@ -9,7 +8,9 @@ import {
   TextInput,
   Platform,
   ScrollView,
+  FlatList,
 } from 'react-native';
+import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +19,29 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import type { SettingsStackParamList } from '../navigation/AppNavigator';
+import { getSettings, updateSettings } from '../api/settings';
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) =>
+  String(i).padStart(2, '0'),
+);
+// 분은 5분 단위 — 어르신이 휠 너무 길면 어렵다.
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) =>
+  String(i * 5).padStart(2, '0'),
+);
+
+/** "23:00" 또는 "23:00:00" → { hour, minute } 안전 파싱. */
+const parseHHmm = (s: string | null | undefined): { hour: string; minute: string } => {
+  if (!s) return { hour: '00', minute: '00' };
+  const [h = '00', m = '00'] = s.split(':');
+  return { hour: h.padStart(2, '0'), minute: m.padStart(2, '0') };
+};
+
+/** "00" → "자정", "12" → "정오", 그 외 "오전/오후 N시" 형식. */
+const formatTimeLabel = (hhmm: string | null | undefined): string => {
+  if (!hhmm) return '자정 (00:00)';
+  const { hour, minute } = parseHHmm(hhmm);
+  return `${hour}:${minute}`;
+};
 
 type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'SettingsMain'>;
 
@@ -43,6 +67,58 @@ const SettingsScreen: React.FC = () => {
   const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
   const [emergencyDraft, setEmergencyDraft] = useState('');
   const [savingEmergency, setSavingEmergency] = useState(false);
+
+  // 자동 일기 완료 시간 — 백엔드 자정 스케줄러가 이 시각에 IN_PROGRESS → COMPLETED
+  const [autoCompleteTime, setAutoCompleteTime] = useState<string>('00:00');
+  const [autoTimeModalVisible, setAutoTimeModalVisible] = useState(false);
+  const [autoTimeDraft, setAutoTimeDraft] = useState<{ hour: string; minute: string }>({
+    hour: '00',
+    minute: '00',
+  });
+  const [savingAutoTime, setSavingAutoTime] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getSettings();
+        if (cancelled) return;
+        if (data.autoCompleteTime) {
+          const { hour, minute } = parseHHmm(data.autoCompleteTime);
+          setAutoCompleteTime(`${hour}:${minute}`);
+        }
+      } catch (e) {
+        console.warn('[Settings] 초기 로딩 실패:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openAutoTimeModal = () => {
+    setAutoTimeDraft(parseHHmm(autoCompleteTime));
+    setAutoTimeModalVisible(true);
+  };
+
+  const handleSaveAutoTime = async () => {
+    const next = `${autoTimeDraft.hour}:${autoTimeDraft.minute}`;
+    setSavingAutoTime(true);
+    try {
+      const data = await updateSettings({ autoCompleteTime: next });
+      if (data.autoCompleteTime) {
+        const { hour, minute } = parseHHmm(data.autoCompleteTime);
+        setAutoCompleteTime(`${hour}:${minute}`);
+      } else {
+        setAutoCompleteTime(next);
+      }
+      setAutoTimeModalVisible(false);
+    } catch (e: any) {
+      Alert.alert('저장 실패', e?.message ?? '최종 일기 생성 시간을 저장하지 못했어요.');
+    } finally {
+      setSavingAutoTime(false);
+    }
+  };
 
   const openEmergencyModal = () => {
     setEmergencyDraft(userEmergencyContact ?? '');
@@ -135,6 +211,21 @@ const SettingsScreen: React.FC = () => {
           >
             <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>손주 얼굴 설정</Text>
             <Text style={styles.actionArrow}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={openAutoTimeModal}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>
+              최종 일기 생성 시간
+            </Text>
+            <View style={styles.actionRight}>
+              <Text style={[styles.rowValue, { fontSize: scale(15) }]}>
+                {formatTimeLabel(autoCompleteTime)}
+              </Text>
+              <Text style={styles.actionArrow}>›</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -239,6 +330,120 @@ const SettingsScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* 자동 일기 완료 시간 picker 모달 */}
+      <Modal
+        visible={autoTimeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAutoTimeModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { height: '60%' }]}>
+            <SafeAreaView edges={['bottom']} style={styles.modalSafe}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity
+                  onPress={() => setAutoTimeModalVisible(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={[styles.modalHeaderBtn, { fontSize: scale(15) }]}>
+                    취소
+                  </Text>
+                </TouchableOpacity>
+                <Text style={[styles.modalHeaderTitle, { fontSize: scale(16) }]}>
+                  최종 일기 생성 시간
+                </Text>
+                <TouchableOpacity
+                  onPress={handleSaveAutoTime}
+                  disabled={savingAutoTime}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text
+                    style={[
+                      styles.modalHeaderBtn,
+                      styles.modalHeaderSave,
+                      { fontSize: scale(15) },
+                      savingAutoTime && { opacity: 0.5 },
+                    ]}
+                  >
+                    {savingAutoTime ? '저장 중...' : '저장'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.modalHelper, styles.autoTimeHelper, { fontSize: scale(13) }]}>
+                이 시각이 되면 그날의 일기가 자동으로 최종 일기로 생성돼요.
+              </Text>
+
+              <View style={styles.timePickerWrap}>
+                <View style={styles.timePickerColumn}>
+                  <Text style={[styles.timePickerColumnLabel, { fontSize: scale(13) }]}>
+                    시
+                  </Text>
+                  <FlatList
+                    data={HOUR_OPTIONS}
+                    keyExtractor={item => item}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => {
+                      const isActive = item === autoTimeDraft.hour;
+                      return (
+                        <TouchableOpacity
+                          style={[styles.timeItem, isActive && styles.timeItemActive]}
+                          onPress={() => setAutoTimeDraft(d => ({ ...d, hour: item }))}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.timeItemText,
+                              isActive && styles.timeItemTextActive,
+                              { fontSize: scale(17) },
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                </View>
+
+                <Text style={[styles.timeSeparator, { fontSize: scale(28) }]}>:</Text>
+
+                <View style={styles.timePickerColumn}>
+                  <Text style={[styles.timePickerColumnLabel, { fontSize: scale(13) }]}>
+                    분
+                  </Text>
+                  <FlatList
+                    data={MINUTE_OPTIONS}
+                    keyExtractor={item => item}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => {
+                      const isActive = item === autoTimeDraft.minute;
+                      return (
+                        <TouchableOpacity
+                          style={[styles.timeItem, isActive && styles.timeItemActive]}
+                          onPress={() => setAutoTimeDraft(d => ({ ...d, minute: item }))}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.timeItemText,
+                              isActive && styles.timeItemTextActive,
+                              { fontSize: scale(17) },
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                </View>
+              </View>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -319,6 +524,7 @@ const styles = StyleSheet.create({
   rowValue: {
     color: '#8A857F',
     fontWeight: '500',
+    flexShrink: 0,
   },
   actionRow: {
     flexDirection: 'row',
@@ -333,6 +539,8 @@ const styles = StyleSheet.create({
   actionLabel: {
     color: '#3D3A37',
     fontWeight: '500',
+    flex: 1,
+    marginRight: 8,
   },
   actionArrow: {
     fontSize: 20,
@@ -343,6 +551,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   logoutText: {
     color: '#D9534F',
@@ -404,6 +613,52 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     color: '#2C2A28',
     minHeight: 52,
+  },
+
+  // 자동 완료 시간 picker
+  autoTimeHelper: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  timePickerWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  timePickerColumn: {
+    flex: 1,
+  },
+  timePickerColumnLabel: {
+    color: '#A09B95',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  timeItem: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 10,
+    marginVertical: 2,
+  },
+  timeItemActive: {
+    backgroundColor: '#2C2A28',
+  },
+  timeItemText: {
+    color: '#3D3A37',
+    fontWeight: '500',
+  },
+  timeItemTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  timeSeparator: {
+    color: '#2C2A28',
+    fontWeight: '700',
+    paddingTop: 28,
   },
 });
 

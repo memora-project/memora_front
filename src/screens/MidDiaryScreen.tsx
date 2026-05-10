@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -16,6 +15,7 @@ import {
   Permission,
   Linking,
 } from 'react-native';
+import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ImagePicker, {
   Image as PickerImage,
@@ -25,10 +25,11 @@ import Geolocation from '@react-native-community/geolocation';
 import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
 import { pickImageWithExif } from '../native/PhotoExif';
 import { createTodayDiary, type MoodType } from '../api/diaries';
-import { createSegment, updateSegment } from '../api/segments';
+import { createSegment, updateSegment, deleteSegment } from '../api/segments';
 import { generateSegmentAiDraft } from '../api/aiDiary';
 import { uploadImage } from '../api/files';
 import { useSettings } from '../contexts/SettingsContext';
+import SuccessModal from '../components/SuccessModal';
 
 /**
  * 필요한 권한 (네이티브 빌드 시 설정)
@@ -254,6 +255,80 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const [segmentId, setSegmentId] = useState<number | null>(null);
   const [editMenuVisible, setEditMenuVisible] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [savedModalVisible, setSavedModalVisible] = useState(false);
+  // "마음에 들어요!" 정상 저장 흐름인지 표시.
+  // beforeRemove listener가 이 ref를 보고 confirm dialog를 건너뛴다.
+  const isSavingRef = useRef(false);
+
+  // 화면을 떠나려 할 때 confirm dialog 띄움.
+  // Step 2→3에서 createSegment로 이미 백엔드에 저장된 segment를, 사용자가 "마음에 들어요!" 없이
+  // 떠나면 garbage가 되므로 그 경우엔 segment를 삭제.
+  //
+  // 두 가지 경로를 모두 가로챈다:
+  //   1) beforeRemove — 모달 swipe-down, 하드웨어 뒤로가기, navigate 호출 등 stack 레벨 이동
+  //   2) tabPress    — 하단 탭바의 다른 탭(캘린더/사용자분석/설정) 클릭 (stack에선 안 잡힘)
+  useEffect(() => {
+    const confirmLeave = (onConfirm: () => void) => {
+      Alert.alert(
+        '일기 작성을 떠나시겠어요?',
+        '떠나면 지금까지 작성한 일기가 저장되지 않습니다.',
+        [
+          { text: '머무르기', style: 'cancel', onPress: () => {} },
+          {
+            text: '나가기',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                if (diaryId && segmentId) {
+                  await deleteSegment(diaryId, segmentId);
+                }
+              } catch (err) {
+                console.warn('segment 삭제 실패:', err);
+              }
+              // 백엔드 segment 삭제됐으니 다음 navigate는 confirm 건너뛰게 마킹
+              isSavingRef.current = true;
+              onConfirm();
+            },
+          },
+        ],
+      );
+    };
+
+    const unsubscribeBeforeRemove = navigation.addListener(
+      'beforeRemove',
+      e => {
+        if (!segmentId || isSavingRef.current) return;
+        e.preventDefault();
+        confirmLeave(() => navigation.dispatch(e.data.action));
+      },
+    );
+
+    // 부모 Tab Navigator의 tabPress 이벤트 — 캘린더/분석/설정 탭 클릭 시.
+    // getParent()로 한 단계 위인 Tab Navigator에 접근.
+    const tabParent = navigation.getParent();
+    const unsubscribeTabPress = tabParent?.addListener(
+      // @ts-ignore — tabPress는 Tab Navigator에서만 발동되지만 타입은 stack 기준이라 단언.
+      'tabPress',
+      (e: { preventDefault: () => void; target?: string }) => {
+        if (!segmentId || isSavingRef.current) return;
+        e.preventDefault();
+        confirmLeave(() => {
+          // 사용자가 나가기 선택 → 같은 탭 다시 누른 효과로 그쪽으로 이동
+          // target은 'DiaryList-XXX' 같은 형태. 우리가 ':' 등으로 잘라 navigator name 추출.
+          const tabName = e.target?.split('-')[0];
+          if (tabName) {
+            // @ts-ignore — 부모 nav 타입 단언 (Tab Navigator)
+            tabParent?.navigate(tabName);
+          }
+        });
+      },
+    );
+
+    return () => {
+      unsubscribeBeforeRemove();
+      unsubscribeTabPress?.();
+    };
+  }, [navigation, segmentId, diaryId]);
 
   // 화면 진입 시: 오늘 일기 확보. 이미 있으면 기존 diary 반환됨.
   useEffect(() => {
@@ -645,8 +720,9 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
 
     try {
       await updateSegment(diaryId, segmentId, { userContent: trimmed });
-      // 저장 직후 바로 Home으로 (Home의 useFocusEffect가 새 목록을 가져옴)
-      navigation.navigate('Home');
+      // 정상 저장 — beforeRemove에서 confirm dialog 안 띄우도록 flag set.
+      isSavingRef.current = true;
+      setSavedModalVisible(true);
     } catch (e: any) {
       Alert.alert('저장 실패', e?.message ?? '알 수 없는 오류가 발생했어요.');
     }
@@ -1024,6 +1100,17 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <SuccessModal
+        visible={savedModalVisible}
+        emoji="✨"
+        title="저장 완료"
+        message={'오늘의 일기가\n잘 저장되었어요.'}
+        onClose={() => {
+          setSavedModalVisible(false);
+          navigation.navigate('Home');
+        }}
+      />
     </SafeAreaView>
   );
 };

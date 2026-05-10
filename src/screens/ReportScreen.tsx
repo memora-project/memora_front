@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
@@ -17,6 +17,18 @@ import {
 } from '../api/reports';
 import { MOOD_INFO, MOOD_ORDER, type MoodType } from '../constants/moods';
 import MoodBarChart from '../components/MoodBarChart';
+
+/**
+ * AI 응답이 한 덩어리로 오는 경우 마침표/물음표/느낌표 뒤에 줄바꿈을 넣어
+ * 문장별로 분리한다. 어르신 가독성용.
+ */
+const formatAIText = (text: string): string => {
+  if (!text) return text;
+  if (text.includes('\n')) {
+    return text.replace(/\n{2,}/g, '\n');
+  }
+  return text.replace(/([.!?])\s+/g, '$1\n').trim();
+};
 
 type Period = 'weekly' | 'monthly';
 
@@ -193,7 +205,7 @@ const ReportScreen: React.FC = () => {
                   ]}
                 >
                   {report.aiAnalysisSummary && report.aiAnalysisSummary.length > 0
-                    ? report.aiAnalysisSummary
+                    ? formatAIText(report.aiAnalysisSummary)
                     : '아직 분석할 데이터가 충분하지 않아요. 일기를 더 작성해 주세요.'}
                 </Text>
               </View>

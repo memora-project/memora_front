@@ -2,12 +2,12 @@ import React, { useMemo, useRef } from 'react';
 import {
   Modal,
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Text } from './AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 // @ts-ignore — react-native-dotenv는 런타임 환경변수, 타입은 별도로 제공 안 함

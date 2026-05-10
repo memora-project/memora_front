@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ImageSourcePropType } from 'react-native';
+import { View, Image, StyleSheet, ImageSourcePropType } from 'react-native';
+import { Text } from './AppText';
 import { useSettings } from '../contexts/SettingsContext';
 
 export type GrandchildMood = 'happy' | 'caring' | 'curious' | 'cheering';

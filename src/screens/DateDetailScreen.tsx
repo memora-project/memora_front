@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
@@ -13,6 +12,7 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
+import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFocusEffect } from '@react-navigation/native';
@@ -32,6 +32,7 @@ import {
 } from '../api/segments';
 import { resolveImageUrl } from '../api/files';
 import { MOOD_INFO } from '../constants/moods';
+import PhotoViewerModal from '../components/PhotoViewerModal';
 import type { DateDetailScreenProps } from '../navigation/AppNavigator';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -220,7 +221,9 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
     if (!card) return;
     closeActionSheet();
     setEditingCard(card);
-    setEditText(card.content);
+    // 본문 보기와 동일한 포맷팅을 편집 입력에도 적용 — 일반 일기처럼 한 덩어리로 저장된 텍스트도
+    // 마침표/물음표/느낌표 단위로 줄바꿈된 상태로 편집되도록 한다.
+    setEditText(formatDisplayText(card.content));
   };
 
   const handlePickDelete = () => {
@@ -473,12 +476,22 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                       decelerationRate="fast"
                     >
                       {actionCard.photos.map((url, idx) => (
-                        <Image
+                        <TouchableOpacity
                           key={`viewer-${idx}`}
-                          source={{ uri: resolveImageUrl(url) }}
-                          style={styles.carouselImage}
-                          resizeMode="cover"
-                        />
+                          activeOpacity={0.85}
+                          onPress={() =>
+                            setPhotoViewer({
+                              photos: actionCard.photos,
+                              startIndex: idx,
+                            })
+                          }
+                        >
+                          <Image
+                            source={{ uri: resolveImageUrl(url) }}
+                            style={styles.carouselImage}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
                       ))}
                     </ScrollView>
                     {actionCard.photos.length > 1 && (
@@ -597,47 +610,12 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
         </View>
       </Modal>
 
-      {/* 사진 전체보기 모달 — 카드 사진 직접 탭 시 큰 화면 + 옆 스와이프 */}
-      <Modal
+      <PhotoViewerModal
         visible={photoViewer !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPhotoViewer(null)}
-      >
-        <View style={styles.photoViewerBackdrop}>
-          <TouchableOpacity
-            style={styles.photoViewerClose}
-            onPress={() => setPhotoViewer(null)}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.photoViewerCloseText}>×</Text>
-          </TouchableOpacity>
-          {photoViewer && (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              contentOffset={{ x: photoViewer.startIndex * SCREEN_WIDTH, y: 0 }}
-              decelerationRate="fast"
-            >
-              {photoViewer.photos.map((url, idx) => (
-                <View key={`viewer-full-${idx}`} style={styles.photoViewerPage}>
-                  <Image
-                    source={{ uri: resolveImageUrl(url) }}
-                    style={styles.photoViewerImage}
-                    resizeMode="contain"
-                  />
-                </View>
-              ))}
-            </ScrollView>
-          )}
-          {photoViewer && photoViewer.photos.length > 1 && (
-            <Text style={styles.photoViewerHint}>
-              ← 옆으로 넘겨 보세요 ({photoViewer.photos.length}장) →
-            </Text>
-          )}
-        </View>
-      </Modal>
+        photos={photoViewer?.photos ?? []}
+        startIndex={photoViewer?.startIndex ?? 0}
+        onClose={() => setPhotoViewer(null)}
+      />
     </SafeAreaView>
   );
 };
