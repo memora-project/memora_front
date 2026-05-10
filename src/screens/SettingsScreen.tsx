@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   FlatList,
+  Linking,
 } from 'react-native';
 import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -67,6 +68,7 @@ const SettingsScreen: React.FC = () => {
   const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
   const [emergencyDraft, setEmergencyDraft] = useState('');
   const [savingEmergency, setSavingEmergency] = useState(false);
+  const [emergencyMenuVisible, setEmergencyMenuVisible] = useState(false);
 
   // 자동 일기 완료 시간 — 백엔드 자정 스케줄러가 이 시각에 IN_PROGRESS → COMPLETED
   const [autoCompleteTime, setAutoCompleteTime] = useState<string>('00:00');
@@ -123,6 +125,37 @@ const SettingsScreen: React.FC = () => {
   const openEmergencyModal = () => {
     setEmergencyDraft(userEmergencyContact ?? '');
     setEmergencyModalVisible(true);
+  };
+
+  /**
+   * 비상 연락처 row 탭 시 호출.
+   * 등록되어 있으면 액션 메뉴 모달, 없으면 등록 모달로 바로.
+   */
+  const handleEmergencyAction = () => {
+    if (!userEmergencyContact) {
+      openEmergencyModal();
+      return;
+    }
+    setEmergencyMenuVisible(true);
+  };
+
+  const handleEmergencyCall = async () => {
+    setEmergencyMenuVisible(false);
+    if (!userEmergencyContact) return;
+    const digits = userEmergencyContact.replace(/[^0-9+]/g, '');
+    try {
+      await Linking.openURL(`tel:${digits}`);
+    } catch (e) {
+      Alert.alert(
+        '전화 연결 실패',
+        '전화 앱을 열 수 없어요. 직접 걸어주세요.',
+      );
+    }
+  };
+
+  const handleEmergencyEditFromMenu = () => {
+    setEmergencyMenuVisible(false);
+    openEmergencyModal();
   };
 
   const handleSaveEmergency = async () => {
@@ -235,7 +268,7 @@ const SettingsScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.actionRow}
-            onPress={openEmergencyModal}
+            onPress={handleEmergencyAction}
             activeOpacity={0.7}
           >
             <Text style={[styles.actionLabel, { fontSize: scale(15) }]}>비상 연락처</Text>
@@ -329,6 +362,63 @@ const SettingsScreen: React.FC = () => {
             </SafeAreaView>
           </View>
         </View>
+      </Modal>
+
+      {/* 비상 연락처 액션 메뉴 — 전화 걸기와 수정/취소를 시각적으로 분리해서 오탭 방지 */}
+      <Modal
+        visible={emergencyMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEmergencyMenuVisible(false)}
+        statusBarTranslucent
+      >
+        <TouchableOpacity
+          style={styles.menuBackdrop}
+          activeOpacity={1}
+          onPress={() => setEmergencyMenuVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.menuCard}>
+            <Text style={[styles.menuTitle, { fontSize: scale(20) }]}>
+              비상 연락처
+            </Text>
+            <Text style={[styles.menuNumber, { fontSize: scale(15) }]}>
+              {userEmergencyContact}
+            </Text>
+
+            {/* 가장 중요한 액션 — 빨간 강조 버튼, 위에 단독 배치 */}
+            <TouchableOpacity
+              style={styles.menuCallBtn}
+              onPress={handleEmergencyCall}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.menuCallBtnText, { fontSize: scale(17) }]}>
+                📞 전화 걸기
+              </Text>
+            </TouchableOpacity>
+
+            {/* 분리용 여백 — 위 버튼과 아래 둘을 시각적으로 떼어 오탭 방지 */}
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleEmergencyEditFromMenu}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.menuItemText, { fontSize: scale(16) }]}>
+                ✏️  연락처 수정
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setEmergencyMenuVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.menuItemText, styles.menuCancelText, { fontSize: scale(16) }]}>
+                취소
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* 자동 일기 완료 시간 picker 모달 */}
@@ -613,6 +703,68 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     color: '#2C2A28',
     minHeight: 52,
+  },
+
+  // 비상 연락처 액션 메뉴
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  menuCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    alignItems: 'stretch',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  menuTitle: {
+    color: '#2C2A28',
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  menuNumber: {
+    color: '#8A857F',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  menuCallBtn: {
+    backgroundColor: '#D9534F',
+    paddingVertical: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuCallBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  menuDivider: {
+    height: 18,
+  },
+  menuItem: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  menuItemText: {
+    color: '#3D3A37',
+    fontWeight: '500',
+  },
+  menuCancelText: {
+    color: '#A09B95',
+    fontWeight: '400',
   },
 
   // 자동 완료 시간 picker

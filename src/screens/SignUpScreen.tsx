@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Alert,
   Platform,
-  Switch,
 } from 'react-native';
 import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,8 +32,6 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [birthDate, setBirthDate] = useState('');
   const [address, setAddress] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
-  // isReportShared: 명세상 signup body에 없음 → 추후 PATCH /users/me로 별도 저장 예정
-  const [isReportShared, setIsReportShared] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
@@ -333,30 +330,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
             multiline
             numberOfLines={1}
           />
-          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
-            장시간 활동이 감지되지 않을 경우 연락이 갑니다.
-          </Text>
         </View>
-
-        {/* 토글 */}
-        {emergencyContact.trim().length > 0 && (
-          <View style={styles.switchRow}>
-            <View style={styles.switchLabelWrap}>
-              <Text style={[styles.switchLabel, { fontSize: scale(15) }]}>
-                월간 분석 리포트 공유
-              </Text>
-              <Text style={[styles.switchHelper, { fontSize: scale(13) }]}>
-                비상 연락처에 매월 기분 변화 리포트를 공유합니다.
-              </Text>
-            </View>
-            <Switch
-              value={isReportShared}
-              onValueChange={setIsReportShared}
-              trackColor={{ false: '#EFEAE3', true: '#2C2A28' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-        )}
 
         <TouchableOpacity
           style={[styles.signUpBtn, isLoading && styles.signUpBtnDisabled]}

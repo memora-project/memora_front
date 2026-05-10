@@ -1,0 +1,13 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "assets/fonts/GowunDodum-Regular.ttf",
+      "sha1": "1e19688bd2c87ca8033ccb081d7a3b964853e20e"
+    },
+    {
+      "path": "assets/fonts/OFL.txt",
+      "sha1": "04ae42e241a7afdf40d86a099a3c34a70eee7f4c"
+    }
+  ]
+}
