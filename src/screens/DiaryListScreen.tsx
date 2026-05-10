@@ -11,6 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useSettings } from '../contexts/SettingsContext';
 import { getDiariesByMonth, type DiaryResponse } from '../api/diaries';
+import { getSegments } from '../api/segments';
 import YearMonthPicker from '../components/YearMonthPicker';
 import type { DiaryListMainScreenProps } from '../navigation/AppNavigator';
 
@@ -37,6 +38,9 @@ const formatYearMonth = (dateStr: string): string => {
 const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
   const [diaries, setDiaries] = useState<DiaryResponse[]>([]);
+  // targetDate -> 그날 일기에 실제 작성된 내용(segment 또는 final)이 있는지.
+  // 자동 생성된 빈 컨테이너에는 점 안 뜨게 하기 위함.
+  const [hasContentMap, setHasContentMap] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState<string>(() =>
     new Date().toISOString().slice(0, 10),
@@ -52,9 +56,35 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
         try {
           const ym = currentMonth.slice(0, 7); // 'YYYY-MM'
           const list = await getDiariesByMonth(ym);
-          if (!cancelled) setDiaries(list);
+          if (cancelled) return;
+          setDiaries(list);
+
+          // 각 일기에 실제 콘텐츠(segment 또는 final)가 있는지 병렬 조회.
+          // 빈 자동 생성 컨테이너는 점 안 뜨게 하기 위함.
+          const checks = await Promise.all(
+            list.map(async d => {
+              if (d.finalContent || d.status === 'COMPLETED') {
+                return [d.targetDate, true] as const;
+              }
+              try {
+                const segs = await getSegments(d.diaryId);
+                return [d.targetDate, segs.length > 0] as const;
+              } catch {
+                return [d.targetDate, false] as const;
+              }
+            }),
+          );
+          if (cancelled) return;
+          const map: Record<string, boolean> = {};
+          checks.forEach(([date, has]) => {
+            map[date] = has;
+          });
+          setHasContentMap(map);
         } catch (e) {
-          if (!cancelled) setDiaries([]);
+          if (!cancelled) {
+            setDiaries([]);
+            setHasContentMap({});
+          }
         } finally {
           if (!cancelled) setIsLoading(false);
         }
@@ -68,14 +98,17 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
   const markedDates = useMemo(() => {
     const map: Record<string, MarkedDateInfo> = {};
     diaries.forEach(d => {
-      // targetDate는 이미 'YYYY-MM-DD' 형식이라 추가 변환 불필요.
-      map[d.targetDate] = {
-        marked: true,
-        dotColor: '#2C2A28',
-      };
+      // 실제 작성된 일기(segment 또는 final 있음)만 마킹.
+      // 자동 생성된 빈 컨테이너는 hasContentMap에서 false라 제외됨.
+      if (hasContentMap[d.targetDate]) {
+        map[d.targetDate] = {
+          marked: true,
+          dotColor: '#2C2A28',
+        };
+      }
     });
     return map;
-  }, [diaries]);
+  }, [diaries, hasContentMap]);
 
   const goToPrevMonth = () => {
     const [y, m] = currentMonth.split('-').map(Number);

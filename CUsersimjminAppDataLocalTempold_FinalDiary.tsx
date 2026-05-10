@@ -35,25 +35,13 @@ interface Mood {
  * 둘이 분기되면 사용자가 헷갈림. 이 정의는 추후 공통 모듈로 빼는 게 깔끔.
  */
 const MOODS: Mood[] = [
-  { key: 'best', label: '최고', emoji: '😄' },
-  { key: 'calm', label: '평온', emoji: '😌' },
-  { key: 'unsure', label: '모름', emoji: '🤔' },
-  { key: 'sad', label: '슬픔', emoji: '😢' },
-  { key: 'angry', label: '화남', emoji: '😠' },
-  { key: 'sick', label: '아픔', emoji: '🤒' },
+  { key: 'best', label: '최고에요', emoji: '😄' },
+  { key: 'calm', label: '평온해요', emoji: '😌' },
+  { key: 'unsure', label: '저도\n모르겠어요', emoji: '🤔' },
+  { key: 'sad', label: '슬퍼요', emoji: '😢' },
+  { key: 'angry', label: '화나요', emoji: '😠' },
+  { key: 'sick', label: '몸이\n안 좋아요', emoji: '🤒' },
 ];
-
-/**
- * AI 응답이 한 덩어리로 오는 경우 마침표/물음표/느낌표 뒤에 줄바꿈을 넣어
- * 문장별로 분리한다. 어르신 가독성용.
- */
-const formatAIText = (text: string): string => {
-  if (!text) return text;
-  if (text.includes('\n')) {
-    return text.replace(/\n{2,}/g, '\n');
-  }
-  return text.replace(/([.!?])\s+/g, '$1\n').trim();
-};
 
 const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
@@ -107,7 +95,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
       setIsGenerating(true);
       try {
         const diary = await generateFinalAiDraft(diaryId);
-        const draft = formatAIText(diary.aiDraft ?? '');
+        const draft = diary.aiDraft ?? '';
         if (!cancelled) {
           setDiaryText(draft);
           setOriginalAiDraft(draft);
@@ -213,10 +201,10 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={[styles.title, { fontSize: scale(24) }]}>
-        오늘의 하루를{'\n'}마무리해요
+        오늘의 마음을 마무리해요
       </Text>
       <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
-        하루를 돌아봤을 때,{'\n'}지금의 마음은 어떠신가요?
+        하루를 돌아봤을 때, 지금의 마음은 어떠신가요?
       </Text>
 
       <View style={styles.moodGridWrap}>
@@ -232,12 +220,9 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
               <Text
                 style={[
                   styles.moodLabel,
-                  {
-                    fontSize: scale(14),
-                    lineHeight: scale(20),
-                  },
+                  { fontSize: scale(14), minHeight: scale(38) },
                 ]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {mood.label}
               </Text>
@@ -266,10 +251,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
         </View>
       ) : (
         <TextInput
-          style={[
-            styles.diaryInput,
-            { fontSize: scale(15), lineHeight: scale(28) },
-          ]}
+          style={[styles.diaryInput, { fontSize: scale(15) }]}
           value={diaryText}
           onChangeText={setDiaryText}
           multiline
@@ -487,7 +469,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -503,6 +485,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     textAlignVertical: 'center',
+    lineHeight: 18,
   },
   loadingBox: {
     minHeight: 240,
