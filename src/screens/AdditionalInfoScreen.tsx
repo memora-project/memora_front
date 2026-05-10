@@ -10,35 +10,59 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useAuth, type Gender } from '../contexts/AuthContext';
-import { useSettings } from '../contexts/SettingsContext';
 import BirthdatePicker from '../components/BirthdatePicker';
 import DistrictPicker from '../components/DistrictPicker';
 import type { District } from '../constants/districts';
-import type { ProfileEditScreenProps } from '../navigation/AppNavigator';
+import { useAuth, type Gender } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 
-const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => {
+/**
+ * 카카오 가입자가 첫 로그인 시 필수 정보를 채우는 화면.
+ *
+ * 카카오에서 자동으로 채워진 필드는 prefill되고(수정 가능), 빈 칸은 사용자가 입력해야 한다.
+ * 모든 필수 필드가 채워지면 PATCH /users/me로 저장 → AuthContext.needsAdditionalInfo가
+ * 자연히 false가 되면서 AppNavigator가 메인 화면으로 자동 전환.
+ */
+const AdditionalInfoScreen: React.FC = () => {
   const {
     userName,
-    userBirthDate,
-    userAddress,
     userGender,
-    userNickname,
-    updateProfile,
-    updateNickname,
+    userBirthDate,
+    userPhoneNumber,
+    userAddress,
+    userEmergencyContact,
+    completeAdditionalInfo,
   } = useAuth();
   const { scale } = useSettings();
 
   const [name, setName] = useState(userName ?? '');
-  const [birthDate, setBirthDate] = useState(userBirthDate ?? '');
-  const [address, setAddress] = useState(userAddress ?? '');
   const [gender, setGender] = useState<Gender | ''>(userGender ?? '');
-  const [nickname, setNickname] = useState(userNickname ?? '');
+  const [birthDate, setBirthDate] = useState(userBirthDate ?? '');
+  const [phoneNumber, setPhoneNumber] = useState(userPhoneNumber ?? '');
+  const [address, setAddress] = useState(userAddress ?? '');
+  const [emergencyContact, setEmergencyContact] = useState(userEmergencyContact ?? '');
   const [saving, setSaving] = useState(false);
 
+  const formatPhone = (text: string): string => {
+    const digits = text.replace(/[^0-9]/g, '').slice(0, 11);
+    if (digits.length > 7) {
+      return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    }
+    if (digits.length > 3) {
+      return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    }
+    return digits;
+  };
+
   const handleSave = async () => {
+    if (saving) return;
+
     if (!name.trim()) {
       Alert.alert('알림', '이름을 입력해 주세요.');
+      return;
+    }
+    if (!gender) {
+      Alert.alert('알림', '성별을 선택해 주세요.');
       return;
     }
     if (!birthDate || birthDate.split('-').length !== 3) {
@@ -50,25 +74,29 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
       Alert.alert('알림', '생년월일을 모두 선택해 주세요.');
       return;
     }
-    if (!address) {
-      Alert.alert('알림', '주소를 선택해 주세요.');
+    if (!phoneNumber.trim()) {
+      Alert.alert('알림', '전화번호를 입력해 주세요.');
       return;
     }
-    if (!gender) {
-      Alert.alert('알림', '성별을 선택해 주세요.');
+    if (!address) {
+      Alert.alert('알림', '주소(동네)를 선택해 주세요.');
       return;
     }
 
+    setSaving(true);
     try {
-      setSaving(true);
-      // 본명/생년월일/주소/성별 PATCH (호칭은 별도 PATCH로 honorific 컬럼 갱신)
-      await updateProfile(name.trim(), birthDate, address, gender);
-      await updateNickname(nickname);
-      Alert.alert('저장 완료', '프로필이 수정되었습니다.', [
-        { text: '확인', onPress: () => navigation.goBack() },
-      ]);
-    } catch {
-      Alert.alert('오류', '프로필 저장 중 문제가 발생했습니다.');
+      await completeAdditionalInfo({
+        name,
+        gender,
+        birthDate,
+        phoneNumber,
+        address,
+        emergencyContact: emergencyContact.trim() || undefined,
+      });
+      // 성공 시 needsAdditionalInfo=false 가 되며 AppNavigator가 자동으로 메인으로 전환.
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '알 수 없는 오류';
+      Alert.alert('저장 실패', msg);
     } finally {
       setSaving(false);
     }
@@ -97,15 +125,9 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={styles.backTouch}
-        >
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>프로필 수정</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={[styles.headerTitle, { fontSize: scale(18) }]}>
+          추가 정보 입력
+        </Text>
       </View>
 
       <KeyboardAwareScrollView
@@ -115,6 +137,10 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
         enableOnAndroid={true}
         extraScrollHeight={20}
       >
+        <Text style={[styles.intro, { fontSize: scale(15) }]}>
+          서비스 이용을 위해{'\n'}몇 가지만 더 알려주세요.
+        </Text>
+
         {/* 이름 */}
         <View style={styles.inputWrap}>
           <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
@@ -129,23 +155,6 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
             multiline
             numberOfLines={1}
           />
-        </View>
-
-        {/* 호칭 (선택) */}
-        <View style={styles.inputWrap}>
-          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>호칭 (선택)</Text>
-          <TextInput
-            style={[styles.input, { fontSize: scale(17) }]}
-            value={nickname}
-            onChangeText={setNickname}
-            placeholder="예: 박옥자 어르신, 엄마"
-            placeholderTextColor="#B5AFA8"
-            multiline
-            numberOfLines={1}
-          />
-          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
-            손주가 어떻게 부를지 정해보세요. 비워두면 성별에 맞춰 자동으로 정해져요.
-          </Text>
         </View>
 
         {/* 성별 */}
@@ -167,6 +176,23 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
           <BirthdatePicker value={birthDate} onChange={setBirthDate} />
         </View>
 
+        {/* 전화번호 */}
+        <View style={styles.inputWrap}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
+            전화번호 <Text style={styles.required}>*</Text>
+          </Text>
+          <TextInput
+            style={[styles.input, { fontSize: scale(17) }]}
+            value={phoneNumber}
+            onChangeText={(text) => setPhoneNumber(formatPhone(text))}
+            placeholder="010-0000-0000"
+            placeholderTextColor="#B5AFA8"
+            keyboardType="phone-pad"
+            multiline
+            numberOfLines={1}
+          />
+        </View>
+
         {/* 주소 */}
         <View style={styles.inputWrap}>
           <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
@@ -181,6 +207,24 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
           />
         </View>
 
+        {/* 비상 연락처 */}
+        <View style={styles.inputWrap}>
+          <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>비상 연락처 (선택)</Text>
+          <TextInput
+            style={[styles.input, { fontSize: scale(17) }]}
+            value={emergencyContact}
+            onChangeText={(text) => setEmergencyContact(formatPhone(text))}
+            placeholder="010-0000-0000"
+            placeholderTextColor="#B5AFA8"
+            keyboardType="phone-pad"
+            multiline
+            numberOfLines={1}
+          />
+          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
+            장시간 활동이 감지되지 않을 경우 연락이 갑니다.
+          </Text>
+        </View>
+
         <TouchableOpacity
           style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
           onPress={handleSave}
@@ -188,7 +232,7 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
           disabled={saving}
         >
           <Text style={[styles.saveBtnText, { fontSize: scale(17) }]}>
-            {saving ? '저장 중...' : '저장하기'}
+            {saving ? '저장 중...' : '시작하기'}
           </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
@@ -202,44 +246,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF8F5',
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 12,
-  },
-  backTouch: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtn: {
-    fontSize: 30,
-    color: '#2C2A28',
-    fontWeight: '300',
-    lineHeight: 32,
   },
   headerTitle: {
     fontWeight: '700',
     color: '#2C2A28',
   },
-  headerSpacer: {
-    width: 32,
-  },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 40,
   },
-  inputWrap: {
+  intro: {
+    color: '#5C5852',
+    lineHeight: 22,
     marginBottom: 22,
+  },
+  inputWrap: {
+    marginBottom: 18,
   },
   inputLabel: {
     fontWeight: '600',
     color: '#3D3A37',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   required: {
     color: '#D9534F',
@@ -301,4 +333,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProfileEditScreen;
+export default AdditionalInfoScreen;

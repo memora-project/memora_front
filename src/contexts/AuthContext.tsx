@@ -43,6 +43,11 @@ const STORAGE_KEYS = {
 type AuthContextValue = {
   isLoggedIn: boolean;
   isLoading: boolean;
+  /**
+   * 카카오 가입자처럼 필수 필드(이름/성별/생년월일/전화번호/주소)가 비어있는 경우 true.
+   * AppNavigator가 이 값을 보고 추가정보 입력 화면으로 강제 이동한다.
+   */
+  needsAdditionalInfo: boolean;
   userEmail: string | null;          // login_id
   userName: string | null;
   userGender: Gender | null;
@@ -65,6 +70,19 @@ type AuthContextValue = {
   updateNickname: (nickname: string) => Promise<void>;
   /** 빈 문자열로 호출하면 손주 사진 초기화. */
   updateGrandchildPhoto: (url: string) => Promise<void>;
+  /**
+   * 카카오 가입자가 추가정보(이름/성별/생년월일/전화번호/주소/비상연락처)를 한 번에 채울 때 사용.
+   * PATCH /users/me로 보낸 뒤 응답을 source of truth로 반영 → needsAdditionalInfo가 자연히 false 되어
+   * AppNavigator가 자동으로 메인 화면으로 전환.
+   */
+  completeAdditionalInfo: (input: {
+    name: string;
+    gender: Gender;
+    birthDate: string;
+    phoneNumber: string;
+    address: string;
+    emergencyContact?: string;
+  }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -359,34 +377,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [persistProfile]);
 
   /**
-   * 호칭 업데이트 — 사용자 입력을 로컬에 즉시 반영하고, 백엔드 PATCH도 같이 보낸다.
-   * 백엔드 PATCH 실패는 무시 (로컬에는 저장됨, 사용자 UX 끊지 않음).
+   * 호칭 업데이트 — 백엔드 PATCH /users/me로 honorific을 갱신하고,
+   * 응답 프로필을 source of truth로 로컬에 반영한다.
    * AI 일기에서 사용자를 부르는 이름으로 사용된다.
    */
   const updateNickname = useCallback(async (nickname: string) => {
-    const trimmed = nickname.trim();
-    // 1) 로컬 state/storage 즉시 갱신 (실패하면 throw)
     try {
-      if (trimmed.length === 0) {
-        await AsyncStorage.removeItem(STORAGE_KEYS.USER_NICKNAME);
-        setUserNickname(null);
-      } else {
-        await AsyncStorage.setItem(STORAGE_KEYS.USER_NICKNAME, trimmed);
-        setUserNickname(trimmed);
-      }
+      const profile = await updateMe({ honorific: nickname.trim() });
+      await persistProfile(profile);
     } catch (error) {
-      console.error('호칭 로컬 저장 실패:', error);
+      console.error('호칭 업데이트 실패:', error);
       throw error;
     }
-    // 2) 백엔드 PATCH 별도 try-catch — 실패해도 로컬은 유지하고 throw 안 함.
-    // 백엔드 honorific 컬럼이 정상 동작하면 AI 응답에도 반영됨.
-    try {
-      await updateMe({ honorific: trimmed });
-      console.log('[Honorific] 백엔드 PATCH 성공:', trimmed);
-    } catch (e) {
-      console.warn('[Honorific] 백엔드 PATCH 실패 (로컬은 저장됨):', e);
-    }
-  }, []);
+  }, [persistProfile]);
+
+  const completeAdditionalInfo = useCallback(
+    async (input: {
+      name: string;
+      gender: Gender;
+      birthDate: string;
+      phoneNumber: string;
+      address: string;
+      emergencyContact?: string;
+    }) => {
+      try {
+        const trimmedEmergency = input.emergencyContact?.trim() ?? '';
+        const profile = await updateMe({
+          name: input.name.trim(),
+          gender: input.gender,
+          birthDate: input.birthDate,
+          phoneNumber: input.phoneNumber.trim(),
+          address: input.address,
+          ...(trimmedEmergency.length > 0
+            ? { emergencyContact: trimmedEmergency }
+            : {}),
+        });
+        await persistProfile(profile);
+      } catch (error) {
+        console.error('추가정보 저장 실패:', error);
+        throw error;
+      }
+    },
+    [persistProfile],
+  );
 
   const updateEmergencyContact = useCallback(
     async (contact: string) => {
@@ -410,9 +443,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     [persistProfile, userName, userBirthDate, userAddress, userGender, userPhoneNumber],
   );
 
+  // 카카오 가입자처럼 필수 정보가 일부 비어있으면 true.
+  // 비상연락처는 선택이라 제외.
+  const needsAdditionalInfo =
+    isLoggedIn &&
+    (!userName ||
+      !userGender ||
+      !userBirthDate ||
+      !userPhoneNumber ||
+      !userAddress);
+
   const value: AuthContextValue = {
     isLoggedIn,
     isLoading,
+    needsAdditionalInfo,
     userEmail,
     userName,
     userGender,
@@ -429,6 +473,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     updateEmergencyContact,
     updateNickname,
     updateGrandchildPhoto,
+    completeAdditionalInfo,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
