@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -9,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
@@ -21,6 +21,7 @@ import {
 } from '../api/diaries';
 import { moodKeyToServer } from '../utils/moodMapper';
 import { useSettings } from '../contexts/SettingsContext';
+import SuccessModal from '../components/SuccessModal';
 
 type Step = 1 | 2;
 
@@ -63,6 +64,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const [originalAiDraft, setOriginalAiDraft] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedModalVisible, setSavedModalVisible] = useState(false);
   const [editMenuVisible, setEditMenuVisible] = useState(false);
   const [diaryId, setDiaryId] = useState<number | null>(null);
 
@@ -166,7 +168,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
       });
       // 2) status를 COMPLETED로 전환. 같은 날 다시 진입하면 위 useEffect의 가드가 막음.
       await completeDiary(diaryId);
-      navigation.navigate('Home');
+      setSavedModalVisible(true);
     } catch (e: any) {
       Alert.alert('저장 실패', e?.message ?? '알 수 없는 오류가 발생했어요.');
     } finally {
@@ -404,6 +406,17 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <SuccessModal
+        visible={savedModalVisible}
+        emoji="🌙"
+        title="오늘 하루 수고하셨어요"
+        message={'마무리 일기까지\n잘 저장되었어요.'}
+        onClose={() => {
+          setSavedModalVisible(false);
+          navigation.navigate('Home');
+        }}
+      />
     </SafeAreaView>
   );
 };

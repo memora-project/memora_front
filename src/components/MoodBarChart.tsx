@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from './AppText';
 import { useSettings } from '../contexts/SettingsContext';
 import { MOOD_INFO, MOOD_ORDER, type MoodType } from '../constants/moods';
 
@@ -99,10 +100,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   percent: {
-    width: 44,
+    width: 52,
     textAlign: 'right',
     color: '#3D3A37',
     fontWeight: '600',
+    flexShrink: 0,
   },
   percentEmpty: {
     color: '#A09B95',

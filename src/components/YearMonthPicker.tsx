@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   Modal,
   FlatList,
   StyleSheet,
 } from 'react-native';
+import { Text } from './AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../contexts/SettingsContext';
 

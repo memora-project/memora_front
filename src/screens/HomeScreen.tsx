@@ -1,13 +1,13 @@
 import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AppHeader from '../components/AppHeader';
@@ -205,15 +205,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       ) : (
         <>
           <View style={styles.content}>
-            {caseData.photoUrl ? (
-              <Image
-                source={{ uri: resolveImageUrl(caseData.photoUrl) }}
-                style={styles.bigPhoto}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text style={styles.bigEmoji}>{caseData.emoji}</Text>
-            )}
+            <View style={styles.avatarWrap}>
+              {caseData.photoUrl ? (
+                <Image
+                  source={{ uri: resolveImageUrl(caseData.photoUrl) }}
+                  style={styles.bigPhoto}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.bigEmoji}>{caseData.emoji}</Text>
+              )}
+
+              {/* 이모지/사진 우상단 — 퀴즈 풀기 말풍선 버튼 */}
+              <TouchableOpacity
+                style={styles.quizBubble}
+                onPress={() => navigation.navigate('Quiz')}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.quizBubbleEmoji}>✏️</Text>
+                <Text style={[styles.quizBubbleText, { fontSize: scale(16) }]}>
+                  퀴즈 풀기
+                </Text>
+                <View style={styles.quizBubbleTail} />
+              </TouchableOpacity>
+            </View>
 
             {/* 말풍선 — 이모지에서 말이 나오는 듯 위쪽에 삼각형 꼬리 */}
             <View style={styles.bubbleTail} />
@@ -249,6 +265,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
 
+  // 이모지/사진을 감싸는 컨테이너 — 우상단 말풍선 버튼 anchor
+  avatarWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bigEmoji: {
     fontSize: 130,
     marginBottom: 12,
@@ -259,6 +281,46 @@ const styles = StyleSheet.create({
     borderRadius: 90,
     marginBottom: 12,
     backgroundColor: '#EFEAE3',
+  },
+
+  // 퀴즈 풀기 말풍선 버튼 — 이모지/사진 우상단
+  quizBubble: {
+    position: 'absolute',
+    top: -28,
+    right: -64,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  quizBubbleEmoji: {
+    fontSize: 19,
+  },
+  quizBubbleText: {
+    color: '#2C2A28',
+    fontWeight: '700',
+  },
+  // 말풍선 아래쪽으로 향하는 작은 꼬리 (이모지를 가리키게)
+  quizBubbleTail: {
+    position: 'absolute',
+    left: 16,
+    bottom: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFFFFF',
   },
 
   // 말풍선 꼬리 — 위로 향한 작은 삼각형 (이모지 쪽).

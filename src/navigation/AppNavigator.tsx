@@ -19,6 +19,7 @@ import HomeScreen from '../screens/HomeScreen';
 import MidDiaryScreen from '../screens/MidDiaryScreen';
 import FinalDiaryScreen from '../screens/FinalDiaryScreen';
 import DetailScreen from '../screens/DetailScreen';
+import QuizScreen from '../screens/QuizScreen';
 
 // 탭 화면들
 import DiaryListScreen from '../screens/DiaryListScreen';
@@ -80,12 +81,14 @@ export type DiaryStackParamList = {
   MidDiary: undefined;
   FinalDiary: undefined;
   Detail: { diaryId: number };
+  Quiz: undefined;
 };
 
 export type HomeScreenProps = NativeStackScreenProps<DiaryStackParamList, 'Home'>;
 export type MidDiaryScreenProps = NativeStackScreenProps<DiaryStackParamList, 'MidDiary'>;
 export type FinalDiaryScreenProps = NativeStackScreenProps<DiaryStackParamList, 'FinalDiary'>;
 export type DetailScreenProps = NativeStackScreenProps<DiaryStackParamList, 'Detail'>;
+export type QuizScreenProps = NativeStackScreenProps<DiaryStackParamList, 'Quiz'>;
 
 const DiaryStack = createNativeStackNavigator<DiaryStackParamList>();
 
@@ -110,6 +113,11 @@ const DiaryStackNavigator = () => {
         options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
       />
       <DiaryStack.Screen name="Detail" component={DetailScreen} />
+      <DiaryStack.Screen
+        name="Quiz"
+        component={QuizScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
     </DiaryStack.Navigator>
   );
 };
