@@ -95,6 +95,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // nullable 필드는 null이면 빈 문자열로 대체 (AsyncStorage는 null 불가).
     const emergencyContact = profile.emergencyContact ?? '';
     const grandchildPhoto = profile.grandchildPhotoUrl ?? '';
+    const nickname = profile.honorific ?? '';
     await Promise.all([
       AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, profile.loginId ?? ''),
       AsyncStorage.setItem(STORAGE_KEYS.USER_NAME, profile.name ?? ''),
@@ -105,6 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       AsyncStorage.setItem(STORAGE_KEYS.USER_EMERGENCY_CONTACT, emergencyContact),
       AsyncStorage.setItem(STORAGE_KEYS.USER_CREATED_AT, profile.createdAt ?? ''),
       AsyncStorage.setItem(STORAGE_KEYS.USER_GRANDCHILD_PHOTO, grandchildPhoto),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_NICKNAME, nickname),
     ]);
     setUserEmail(profile.loginId);
     setUserName(profile.name);
@@ -115,6 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserEmergencyContact(emergencyContact || null);
     setUserCreatedAt(profile.createdAt);
     setUserGrandchildPhotoUrl(grandchildPhoto || null);
+    setUserNickname(nickname || null);
   }, []);
 
   // 앱 시작 시 — 저장된 정보 복구 + axios 인터셉터 콜백 등록
@@ -356,11 +359,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [persistProfile]);
 
   /**
-   * 호칭 업데이트 — 로컬 only (백엔드 UserProfile에 호칭 필드 없음).
-   * 빈 문자열이면 사용자가 자동(성별 기반)으로 돌아가고 싶다는 의미로 처리.
+   * 호칭 업데이트 — 사용자 입력을 로컬에 즉시 반영하고, 백엔드 PATCH도 같이 보낸다.
+   * 백엔드 PATCH 실패는 무시 (로컬에는 저장됨, 사용자 UX 끊지 않음).
+   * AI 일기에서 사용자를 부르는 이름으로 사용된다.
    */
   const updateNickname = useCallback(async (nickname: string) => {
     const trimmed = nickname.trim();
+    // 1) 로컬 state/storage 즉시 갱신 (실패하면 throw)
     try {
       if (trimmed.length === 0) {
         await AsyncStorage.removeItem(STORAGE_KEYS.USER_NICKNAME);
@@ -370,8 +375,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUserNickname(trimmed);
       }
     } catch (error) {
-      console.error('호칭 저장 실패:', error);
+      console.error('호칭 로컬 저장 실패:', error);
       throw error;
+    }
+    // 2) 백엔드 PATCH 별도 try-catch — 실패해도 로컬은 유지하고 throw 안 함.
+    // 백엔드 honorific 컬럼이 정상 동작하면 AI 응답에도 반영됨.
+    try {
+      await updateMe({ honorific: trimmed });
+      console.log('[Honorific] 백엔드 PATCH 성공:', trimmed);
+    } catch (e) {
+      console.warn('[Honorific] 백엔드 PATCH 실패 (로컬은 저장됨):', e);
     }
   }, []);
 

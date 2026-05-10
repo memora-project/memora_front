@@ -186,7 +186,12 @@ const ReportScreen: React.FC = () => {
                 AI 분석
               </Text>
               <View style={styles.aiCard}>
-                <Text style={[styles.aiSummary, { fontSize: scale(14) }]}>
+                <Text
+                  style={[
+                    styles.aiSummary,
+                    { fontSize: scale(14), lineHeight: scale(24) },
+                  ]}
+                >
                   {report.aiAnalysisSummary && report.aiAnalysisSummary.length > 0
                     ? report.aiAnalysisSummary
                     : '아직 분석할 데이터가 충분하지 않아요. 일기를 더 작성해 주세요.'}

@@ -61,14 +61,15 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
 
     try {
       setSaving(true);
-      // 백엔드 PATCH 먼저. 호칭은 로컬 only — 백엔드 성공 후에 저장.
+      // 본명/생년월일/주소/성별 PATCH (호칭은 별도 PATCH로 nickname 컬럼 갱신)
       await updateProfile(name.trim(), birthDate, address, gender);
       await updateNickname(nickname);
       Alert.alert('저장 완료', '프로필이 수정되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      Alert.alert('오류', '프로필 저장 중 문제가 발생했습니다.');
+      const msg = error instanceof Error ? error.message : '알 수 없는 오류';
+      Alert.alert('오류', `프로필 저장 중 문제가 발생했습니다.\n\n${msg}`);
     } finally {
       setSaving(false);
     }

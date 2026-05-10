@@ -96,6 +96,18 @@ const segmentBody = (s: SegmentResponse): string =>
 const diaryBody = (d: DiaryResponse): string =>
   (d.isEdited ? d.finalContent : d.aiDraft) ?? '';
 
+/**
+ * 한 덩어리로 저장된 옛 일기들도 화면에 보일 때 자동 문단 분리.
+ * 연속된 \n도 한 번으로 정규화 (옛 \n\n 저장본 호환).
+ */
+const formatDisplayText = (text: string): string => {
+  if (!text) return text;
+  if (text.includes('\n')) {
+    return text.replace(/\n{2,}/g, '\n');
+  }
+  return text.replace(/([.!?])\s+/g, '$1\n').trim();
+};
+
 const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
   route,
   navigation,
@@ -113,6 +125,11 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
   const [editingCard, setEditingCard] = useState<CardItem | null>(null);
   const [editText, setEditText] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // 사진 전체보기 — 카드 사진 직접 탭 시 큰 화면 + 옆 스와이프
+  const [photoViewer, setPhotoViewer] = useState<{
+    photos: string[];
+    startIndex: number;
+  } | null>(null);
 
   const reload = useCallback(async () => {
     const ym = date.slice(0, 7);
@@ -348,17 +365,30 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                     style={styles.cardPhotoStrip}
                   >
                     {card.photos.map((url, idx) => (
-                      <Image
+                      <TouchableOpacity
                         key={`${card.key}-thumb-${idx}`}
-                        source={{ uri: resolveImageUrl(url) }}
-                        style={styles.cardPhotoThumb}
-                        resizeMode="cover"
-                      />
+                        activeOpacity={0.85}
+                        onPress={() =>
+                          setPhotoViewer({
+                            photos: card.photos,
+                            startIndex: idx,
+                          })
+                        }
+                      >
+                        <Image
+                          source={{ uri: resolveImageUrl(url) }}
+                          style={styles.cardPhotoThumb}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
                     ))}
                   </ScrollView>
                 )}
                 <Text
-                  style={[styles.entryContent, { fontSize: scale(14) }]}
+                  style={[
+                    styles.entryContent,
+                    { fontSize: scale(14), lineHeight: scale(24) },
+                  ]}
                   numberOfLines={3}
                 >
                   {card.content}
@@ -461,8 +491,13 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                   </View>
                 )}
 
-                <Text style={[styles.viewerContent, { fontSize: scale(15) }]}>
-                  {actionCard?.content ?? ''}
+                <Text
+                  style={[
+                    styles.viewerContent,
+                    { fontSize: scale(15), lineHeight: scale(28) },
+                  ]}
+                >
+                  {formatDisplayText(actionCard?.content ?? '')}
                 </Text>
               </ScrollView>
 
@@ -559,6 +594,48 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
               </KeyboardAwareScrollView>
             </SafeAreaView>
           </View>
+        </View>
+      </Modal>
+
+      {/* 사진 전체보기 모달 — 카드 사진 직접 탭 시 큰 화면 + 옆 스와이프 */}
+      <Modal
+        visible={photoViewer !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoViewer(null)}
+      >
+        <View style={styles.photoViewerBackdrop}>
+          <TouchableOpacity
+            style={styles.photoViewerClose}
+            onPress={() => setPhotoViewer(null)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.photoViewerCloseText}>×</Text>
+          </TouchableOpacity>
+          {photoViewer && (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              contentOffset={{ x: photoViewer.startIndex * SCREEN_WIDTH, y: 0 }}
+              decelerationRate="fast"
+            >
+              {photoViewer.photos.map((url, idx) => (
+                <View key={`viewer-full-${idx}`} style={styles.photoViewerPage}>
+                  <Image
+                    source={{ uri: resolveImageUrl(url) }}
+                    style={styles.photoViewerImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          {photoViewer && photoViewer.photos.length > 1 && (
+            <Text style={styles.photoViewerHint}>
+              ← 옆으로 넘겨 보세요 ({photoViewer.photos.length}장) →
+            </Text>
+          )}
         </View>
       </Modal>
     </SafeAreaView>
@@ -855,6 +932,47 @@ const styles = StyleSheet.create({
     color: '#2C2A28',
     lineHeight: 24,
     paddingTop: Platform.OS === 'ios' ? 16 : 12,
+  },
+
+  // 사진 전체보기 모달
+  photoViewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    justifyContent: 'center',
+  },
+  photoViewerClose: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoViewerCloseText: {
+    color: '#FFFFFF',
+    fontSize: 36,
+    lineHeight: 36,
+    fontWeight: '300',
+  },
+  photoViewerPage: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoViewerImage: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+  },
+  photoViewerHint: {
+    position: 'absolute',
+    bottom: 48,
+    alignSelf: 'center',
+    color: '#FFFFFF',
+    opacity: 0.7,
+    fontSize: 13,
   },
 });
 

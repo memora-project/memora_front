@@ -79,12 +79,12 @@ interface PhotoMetadata {
 const NO_LOCATION_LABEL = '위치 정보 없음';
 
 const MOODS: Mood[] = [
-  { key: 'best', label: '최고에요', emoji: '😄', apiValue: 'GREAT' },
-  { key: 'calm', label: '평온해요', emoji: '😌', apiValue: 'CALM' },
-  { key: 'unsure', label: '저도 모르겠어요', emoji: '🤔', apiValue: 'UNKNOWN' },
-  { key: 'sad', label: '슬퍼요', emoji: '😢', apiValue: 'SAD' },
-  { key: 'angry', label: '화나요', emoji: '😠', apiValue: 'ANGRY' },
-  { key: 'sick', label: '몸이 안 좋아요', emoji: '🤒', apiValue: 'PAIN' },
+  { key: 'best', label: '최고', emoji: '😄', apiValue: 'GREAT' },
+  { key: 'calm', label: '평온', emoji: '😌', apiValue: 'CALM' },
+  { key: 'unsure', label: '모름', emoji: '🤔', apiValue: 'UNKNOWN' },
+  { key: 'sad', label: '슬픔', emoji: '😢', apiValue: 'SAD' },
+  { key: 'angry', label: '화남', emoji: '😠', apiValue: 'ANGRY' },
+  { key: 'sick', label: '아픔', emoji: '🤒', apiValue: 'PAIN' },
 ];
 
 // EXIF의 GPS는 보통 "37,33,12.34" 형태(도/분/초) 또는 십진수로 옵니다.
@@ -222,6 +222,19 @@ const getDeviceLocation = async (): Promise<DeviceCoords | null> => {
   });
 };
 
+/**
+ * AI 응답이 한 덩어리로 오는 경우 마침표/물음표/느낌표 뒤에 줄바꿈을 넣어
+ * 문장별로 분리한다. 어르신 가독성용.
+ */
+const formatAIText = (text: string): string => {
+  if (!text) return text;
+  if (text.includes('\n')) {
+    // 기존 \n이 여러 번 연속이면 한 번으로 정규화
+    return text.replace(/\n{2,}/g, '\n');
+  }
+  return text.replace(/([.!?])\s+/g, '$1\n').trim();
+};
+
 
 const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
@@ -273,7 +286,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       setIsGenerating(true);
       try {
         const updated = await generateSegmentAiDraft(diaryId, segmentId);
-        if (!cancelled) setDiaryText(updated.aiDraft ?? '');
+        if (!cancelled) setDiaryText(formatAIText(updated.aiDraft ?? ''));
       } catch (e: any) {
         console.warn('AI 초안 생성 실패:', e);
         if (!cancelled) {
@@ -697,7 +710,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         오늘 어떠신가요?
       </Text>
       <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
-        지금의 마음에 가장 가까운 것을 골라주세요
+        지금의 마음에 가장 가까운 것을{'\n'}골라주세요
       </Text>
 
       <View style={styles.moodGridWrap}>
@@ -713,9 +726,12 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
               <Text
                 style={[
                   styles.moodLabel,
-                  { fontSize: scale(12), minHeight: scale(34) },
+                  {
+                    fontSize: scale(14),
+                    lineHeight: scale(20),
+                  },
                 ]}
-                numberOfLines={2}
+                numberOfLines={1}
               >
                 {mood.label}
               </Text>
@@ -734,7 +750,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     >
       <Text style={[styles.title, { fontSize: scale(26) }]}>오늘의 한 장면</Text>
       <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
-        마음에 남은 사진이 있다면 함께 담아보세요
+        마음에 남은 사진이 있다면{'\n'}함께 담아보세요
       </Text>
 
       {photoMetadata?.uri ? (
@@ -802,16 +818,19 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           <Text style={[styles.memoOptional, { fontSize: scale(14) }]}>(선택)</Text>
         </Text>
         <TextInput
-          style={[styles.memoInput, { fontSize: scale(15) }]}
+          style={[
+            styles.memoInput,
+            { fontSize: scale(15), lineHeight: scale(22) },
+          ]}
           value={shortMemo}
           onChangeText={setShortMemo}
-          placeholder="예) 오랜만에 동네 산책, 손주가 보고 싶은 날"
+          placeholder={'예) 누구를 만나셨나요?\n     무엇을 드셨나요?'}
           placeholderTextColor="#B8B3AC"
           // RN 0.85 + Fabric(New Arch)에서 single-line TextInput이 Android 한글
           // IME 조합을 깨는 버그가 있다. multiline=true로 두면 IME 처리 경로가
-          // 달라져 정상 입력됨. 한 줄 메모지만 시각적으로만 한 줄처럼 보이도록 처리.
+          // 달라져 정상 입력됨. 두 줄짜리 placeholder가 잘리지 않게 numberOfLines=2.
           multiline
-          numberOfLines={1}
+          numberOfLines={2}
           blurOnSubmit
           returnKeyType="done"
         />
@@ -846,10 +865,10 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Text style={[styles.title, { fontSize: scale(26) }]}>
-        AI가 다듬어 본 초안이에요
+        AI가 다듬어 본{'\n'}초안이에요
       </Text>
       <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
-        마음에 들면 그대로, 아니라면 자유롭게 고쳐주세요
+        마음에 들면 그대로,{'\n'}아니라면 자유롭게 고쳐주세요
       </Text>
 
       {photoMetadata?.uri && (
@@ -869,7 +888,10 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
         </View>
       ) : (
         <TextInput
-          style={[styles.diaryInput, { fontSize: scale(16) }]}
+          style={[
+            styles.diaryInput,
+            { fontSize: scale(16), lineHeight: scale(28) },
+          ]}
           value={diaryText}
           onChangeText={setDiaryText}
           multiline
@@ -1087,7 +1109,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -1194,6 +1216,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 15,
     color: '#2C2A28',
+    textAlignVertical: 'top',
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,

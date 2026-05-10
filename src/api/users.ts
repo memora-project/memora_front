@@ -18,6 +18,8 @@ export interface UserProfile {
   createdAt: string;
   /** 손주 얼굴 사진 url(/uploads/...) — 미설정이면 null. */
   grandchildPhotoUrl: string | null;
+  /** 사용자가 정한 호칭 — AI 일기에서 부르는 이름. 미설정이면 null. (백엔드 컬럼명: honorific) */
+  honorific: string | null;
 }
 
 export interface UpdateProfileRequest {
@@ -30,6 +32,8 @@ export interface UpdateProfileRequest {
   isReportShared?: boolean;
   /** 빈 문자열로 보내면 백엔드에서 null로 초기화 처리됨. */
   grandchildPhotoUrl?: string;
+  /** 빈 문자열로 보내면 백엔드에서 null로 초기화 처리됨. */
+  honorific?: string;
 }
 
 /**
