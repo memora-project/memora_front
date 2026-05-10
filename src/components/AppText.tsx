@@ -1,5 +1,8 @@
 import React from 'react';
-import { Text as RNText, type TextProps } from 'react-native';
+import { Text as RNText, StyleSheet, type TextProps } from 'react-native';
+
+/** 어르신 가독성용 기본 line-height 배율 — fontSize × 이 값. */
+const DEFAULT_LINE_HEIGHT_RATIO = 1.55;
 
 /**
  * 한국어 widow 방지를 자동 적용하는 Text 컴포넌트.
@@ -62,14 +65,30 @@ function processChildren(children: React.ReactNode): React.ReactNode {
 }
 
 export const Text = React.forwardRef<RNText, TextProps>((props, ref) => {
-  const { children, ...rest } = props;
+  const { children, style, ...rest } = props;
+
+  // 호출자 style을 flatten해서 fontSize/lineHeight 검사.
+  // fontSize는 있는데 lineHeight 명시가 없으면 자동으로 1.55배를 채워 어르신 가독성 확보.
+  const flat = StyleSheet.flatten(style) as
+    | { fontSize?: number; lineHeight?: number }
+    | undefined;
+  const fontSize = typeof flat?.fontSize === 'number' ? flat.fontSize : undefined;
+  const hasLineHeight = typeof flat?.lineHeight === 'number';
+
+  const baseStyle: { fontFamily: string; lineHeight?: number } = {
+    fontFamily: 'GowunDodum-Regular',
+  };
+  if (fontSize !== undefined && !hasLineHeight) {
+    baseStyle.lineHeight = Math.round(fontSize * DEFAULT_LINE_HEIGHT_RATIO);
+  }
+
   return (
     <RNText
       ref={ref}
-      // 단어 가운데 character break 차단 (Android API 23+)
       textBreakStrategy="simple"
-      // iOS 한국어 특화 줄바꿈
       lineBreakStrategyIOS="hangul-word"
+      // 호출자가 명시한 style이 뒤라 우선 — fontFamily/lineHeight를 override 가능.
+      style={[baseStyle, style]}
       {...rest}
     >
       {processChildren(children)}

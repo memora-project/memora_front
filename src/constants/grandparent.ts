@@ -34,7 +34,7 @@ export const resolveNickname = (
 export const EMPTY_DAY_GREETING = '오늘 어떠세요?';
 
 /** 최종 일기까지 작성한 후의 마무리 멘트. */
-export const FINAL_DONE_GREETING = '오늘도 수고하셨어요.';
+export const FINAL_DONE_GREETING = '오늘도 좋은 밤 되세요.';
 
 /** mood.key 매칭 안 되거나 mood가 null일 때의 fallback. */
 export const DEFAULT_AFTER_DIARY_GREETING = '마음을 적어주셔서 고마워요.';
