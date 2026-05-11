@@ -30,6 +30,7 @@ import { generateSegmentAiDraft } from '../api/aiDiary';
 import { uploadImage } from '../api/files';
 import { useSettings } from '../contexts/SettingsContext';
 import SuccessModal from '../components/SuccessModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 /**
  * 필요한 권한 (네이티브 빌드 시 설정)
@@ -256,6 +257,8 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const [editMenuVisible, setEditMenuVisible] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [savedModalVisible, setSavedModalVisible] = useState(false);
+  // 일기 작성 떠나기 확인 모달
+  const [leaveModalVisible, setLeaveModalVisible] = useState(false);
   // "마음에 들어요!" 정상 저장 흐름인지 표시.
   // beforeRemove listener가 이 ref를 보고 confirm dialog를 건너뛴다.
   const isSavingRef = useRef(false);
@@ -268,67 +271,83 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   //   1) beforeRemove — 모달 swipe-down, 하드웨어 뒤로가기, navigate 호출 등 stack 레벨 이동
   //   2) tabPress    — 하단 탭바의 다른 탭(캘린더/사용자분석/설정) 클릭 (stack에선 안 잡힘)
   useEffect(() => {
-    const confirmLeave = (onConfirm: () => void) => {
-      Alert.alert(
-        '일기 작성을 떠나시겠어요?',
-        '떠나면 지금까지 작성한 일기가 저장되지 않습니다.',
-        [
-          { text: '머무르기', style: 'cancel', onPress: () => {} },
-          {
-            text: '나가기',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                if (diaryId && segmentId) {
-                  await deleteSegment(diaryId, segmentId);
-                }
-              } catch (err) {
-                console.warn('segment 삭제 실패:', err);
-              }
-              // 백엔드 segment 삭제됐으니 다음 navigate는 confirm 건너뛰게 마킹
-              isSavingRef.current = true;
-              onConfirm();
-            },
-          },
-        ],
-      );
-    };
+    const shouldGuard = () => segmentId !== null && !isSavingRef.current;
 
+    // stack 레벨 이동(swipe-down/하드웨어 뒤로/Home 탭 재선택으로 popToTop 등) 가로채기
     const unsubscribeBeforeRemove = navigation.addListener(
       'beforeRemove',
       e => {
-        if (!segmentId || isSavingRef.current) return;
+        if (!shouldGuard()) return;
         e.preventDefault();
-        confirmLeave(() => navigation.dispatch(e.data.action));
+        setLeaveModalVisible(true);
       },
     );
 
-    // 부모 Tab Navigator의 tabPress 이벤트 — 캘린더/분석/설정 탭 클릭 시.
-    // getParent()로 한 단계 위인 Tab Navigator에 접근.
     const tabParent = navigation.getParent();
+
+    // tabPress는 현재 탭(Home) 재선택만 잡힌다 (RN v7 동작) → state 리스너로 보강
     const unsubscribeTabPress = tabParent?.addListener(
-      // @ts-ignore — tabPress는 Tab Navigator에서만 발동되지만 타입은 stack 기준이라 단언.
+      // @ts-ignore — tabPress는 Tab Navigator 이벤트라 stack 타입엔 없음
       'tabPress',
-      (e: { preventDefault: () => void; target?: string }) => {
-        if (!segmentId || isSavingRef.current) return;
+      (e: { preventDefault: () => void }) => {
+        if (!shouldGuard()) return;
         e.preventDefault();
-        confirmLeave(() => {
-          // 사용자가 나가기 선택 → 같은 탭 다시 누른 효과로 그쪽으로 이동
-          // target은 'DiaryList-XXX' 같은 형태. 우리가 ':' 등으로 잘라 navigator name 추출.
-          const tabName = e.target?.split('-')[0];
-          if (tabName) {
-            // @ts-ignore — 부모 nav 타입 단언 (Tab Navigator)
-            tabParent?.navigate(tabName);
-          }
-        });
+        setLeaveModalVisible(true);
+      },
+    );
+
+    // 다른 탭(캘린더/분석/설정) 클릭 → tabPress가 안 잡히므로 state 변화로 감지.
+    // Home 탭에서 벗어나는 순간 즉시 되돌리고 모달 띄움.
+    const unsubscribeState = tabParent?.addListener(
+      // @ts-ignore — state 이벤트도 타입 정의에선 안 보임
+      'state',
+      (e: { data?: { state?: { index: number; routes: { name: string }[] } } }) => {
+        if (!shouldGuard()) return;
+        const state = e.data?.state;
+        const currentRouteName = state?.routes?.[state.index]?.name;
+        if (currentRouteName && currentRouteName !== 'Home') {
+          // 다음 tick에 되돌려야 state 적용 충돌 없음
+          setTimeout(() => {
+            // @ts-ignore — Tab Navigator navigate
+            tabParent?.navigate('Home');
+            setLeaveModalVisible(true);
+          }, 0);
+        }
       },
     );
 
     return () => {
       unsubscribeBeforeRemove();
       unsubscribeTabPress?.();
+      unsubscribeState?.();
     };
-  }, [navigation, segmentId, diaryId]);
+  }, [navigation, segmentId]);
+
+  // 모달의 "나가기" — segment 삭제 후 홈 메인 화면으로 직행
+  const handleLeavePressed = async () => {
+    setLeaveModalVisible(false);
+    try {
+      if (diaryId && segmentId) {
+        await deleteSegment(diaryId, segmentId);
+      }
+    } catch (err) {
+      console.warn('segment 삭제 실패:', err);
+    }
+    // 이후 beforeRemove가 다시 묻지 않도록 마킹
+    isSavingRef.current = true;
+    // 항상 홈 탭 + 홈 메인 화면으로
+    const tabParent = navigation.getParent();
+    if (tabParent) {
+      // @ts-ignore — Tab Navigator 타입 단언
+      tabParent.navigate('Home', { screen: 'Home' });
+    } else {
+      navigation.navigate('Home');
+    }
+  };
+
+  const handleStayPressed = () => {
+    setLeaveModalVisible(false);
+  };
 
   // 화면 진입 시: 오늘 일기 확보. 이미 있으면 기존 diary 반환됨.
   useEffect(() => {
@@ -1110,6 +1129,18 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
           setSavedModalVisible(false);
           navigation.navigate('Home');
         }}
+      />
+
+      <ConfirmModal
+        visible={leaveModalVisible}
+        emoji="📝"
+        title="일기 작성을 떠나시겠어요?"
+        message={'떠나면 지금까지 작성한\n내용이 저장되지 않아요.'}
+        confirmLabel="나가기"
+        cancelLabel="머무르기"
+        destructive
+        onConfirm={handleLeavePressed}
+        onCancel={handleStayPressed}
       />
     </SafeAreaView>
   );

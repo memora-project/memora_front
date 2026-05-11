@@ -93,7 +93,15 @@ const Grandchild: React.FC<Props> = ({
       <View style={styles.bubbleWrap}>
         <View style={styles.bubbleTail} />
         <View style={styles.bubble}>
-          <Text style={[styles.bubbleText, { fontSize: scale(sizeConfig.fontSize) }]}>
+          <Text
+            style={[
+              styles.bubbleText,
+              {
+                fontSize: scale(sizeConfig.fontSize),
+                lineHeight: scale(sizeConfig.fontSize * 1.43),
+              },
+            ]}
+          >
             {message}
           </Text>
         </View>
@@ -150,7 +158,6 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     color: '#3D3A37',
-    lineHeight: 20,
     fontWeight: '500',
   },
 });

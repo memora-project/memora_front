@@ -143,7 +143,7 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation }) => 
             multiline
             numberOfLines={1}
           />
-          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
+          <Text style={[styles.helperText, { fontSize: scale(13), lineHeight: scale(18) }]}>
             손주가 어떻게 부를지 정해보세요. 비워두면 성별에 맞춰 자동으로 정해져요.
           </Text>
         </View>
@@ -258,7 +258,6 @@ const styles = StyleSheet.create({
   helperText: {
     marginTop: 6,
     color: '#A09B95',
-    lineHeight: 18,
   },
   genderRow: {
     flexDirection: 'row',

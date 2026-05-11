@@ -137,7 +137,7 @@ const AdditionalInfoScreen: React.FC = () => {
         enableOnAndroid={true}
         extraScrollHeight={20}
       >
-        <Text style={[styles.intro, { fontSize: scale(15) }]}>
+        <Text style={[styles.intro, { fontSize: scale(15), lineHeight: scale(22) }]}>
           서비스 이용을 위해{'\n'}몇 가지만 더 알려주세요.
         </Text>
 
@@ -220,7 +220,7 @@ const AdditionalInfoScreen: React.FC = () => {
             multiline
             numberOfLines={1}
           />
-          <Text style={[styles.helperText, { fontSize: scale(13) }]}>
+          <Text style={[styles.helperText, { fontSize: scale(13), lineHeight: scale(18) }]}>
             장시간 활동이 감지되지 않을 경우 연락이 갑니다.
           </Text>
         </View>
@@ -262,7 +262,6 @@ const styles = StyleSheet.create({
   },
   intro: {
     color: '#5C5852',
-    lineHeight: 22,
     marginBottom: 22,
   },
   inputWrap: {
@@ -290,7 +289,6 @@ const styles = StyleSheet.create({
   helperText: {
     marginTop: 6,
     color: '#A09B95',
-    lineHeight: 18,
   },
   genderRow: {
     flexDirection: 'row',

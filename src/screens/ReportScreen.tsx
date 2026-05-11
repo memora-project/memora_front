@@ -149,7 +149,7 @@ const ReportScreen: React.FC = () => {
           </View>
         ) : errorMessage ? (
           <View style={styles.placeholderCard}>
-            <Text style={[styles.placeholderText, { fontSize: scale(14) }]}>
+            <Text style={[styles.placeholderText, { fontSize: scale(14), lineHeight: scale(20) }]}>
               {errorMessage}
             </Text>
           </View>
@@ -346,7 +346,6 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: '#A09B95',
     textAlign: 'center',
-    lineHeight: 20,
   },
 
   aiCard: {

@@ -179,6 +179,7 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
             </View>
 
             <Calendar
+              key={currentMonth.slice(0, 7)}
               current={currentMonth}
               hideArrows={true}
               renderHeader={() => null}
