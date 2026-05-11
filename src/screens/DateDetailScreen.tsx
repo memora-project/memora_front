@@ -432,7 +432,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                   onPress={closeActionSheet}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={[styles.viewerClose, { fontSize: scale(26) }]}>×</Text>
+                  <Text style={[styles.viewerClose, { fontSize: scale(26), lineHeight: scale(28) }]}>×</Text>
                 </TouchableOpacity>
               </View>
 
@@ -595,7 +595,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                 extraScrollHeight={20}
               >
                 <TextInput
-                  style={[styles.editInput, { fontSize: scale(15) }]}
+                  style={[styles.editInput, { fontSize: scale(15), lineHeight: scale(24) }]}
                   value={editText}
                   onChangeText={setEditText}
                   multiline
@@ -782,7 +782,6 @@ const styles = StyleSheet.create({
   viewerClose: {
     color: '#8A857F',
     fontWeight: '400',
-    lineHeight: 28,
   },
   viewerScroll: {
     flex: 1,
@@ -908,7 +907,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     color: '#2C2A28',
-    lineHeight: 24,
     paddingTop: Platform.OS === 'ios' ? 16 : 12,
   },
 

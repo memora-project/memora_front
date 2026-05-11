@@ -94,7 +94,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ navigation }) => {
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
         <View style={styles.centerWrap}>
           <ActivityIndicator color="#2C2A28" />
-          <Text style={[styles.statusText, { fontSize: scale(15) }]}>
+          <Text style={[styles.statusText, { fontSize: scale(15), lineHeight: scale(22) }]}>
             오늘의 퀴즈를 준비하고 있어요...
           </Text>
         </View>
@@ -106,7 +106,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
         <View style={styles.centerWrap}>
-          <Text style={[styles.statusText, { fontSize: scale(16) }]}>
+          <Text style={[styles.statusText, { fontSize: scale(16), lineHeight: scale(22) }]}>
             {loadError ?? '퀴즈를 불러오지 못했어요.'}
           </Text>
           <TouchableOpacity
@@ -273,7 +273,6 @@ const styles = StyleSheet.create({
     color: '#5C5852',
     marginTop: 16,
     textAlign: 'center',
-    lineHeight: 22,
   },
 
   header: {

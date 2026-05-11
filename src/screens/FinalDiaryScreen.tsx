@@ -217,7 +217,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
       <Text style={[styles.title, { fontSize: scale(24) }]}>
         오늘의 하루를{'\n'}마무리해요
       </Text>
-      <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
+      <Text style={[styles.subtitle, { fontSize: scale(14), lineHeight: scale(20) }]}>
         하루를 돌아봤을 때,{'\n'}지금의 마음은 어떠신가요?
       </Text>
 
@@ -255,7 +255,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
       <Text style={[styles.title, { fontSize: scale(24) }]}>
         오늘 하루를 엮어봤어요
       </Text>
-      <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
+      <Text style={[styles.subtitle, { fontSize: scale(14), lineHeight: scale(20) }]}>
         어떤가요? 마음에 들면 그대로, 아니면 자유롭게 고쳐주세요.
       </Text>
 
@@ -485,7 +485,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#8A857F',
     marginBottom: 28,
-    lineHeight: 20,
   },
   moodGrid: {
     flexDirection: 'row',

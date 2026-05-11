@@ -337,7 +337,7 @@ const SettingsScreen: React.FC = () => {
                 enableOnAndroid={true}
                 extraScrollHeight={20}
               >
-                <Text style={[styles.modalHelper, { fontSize: scale(13) }]}>
+                <Text style={[styles.modalHelper, { fontSize: scale(13), lineHeight: scale(18) }]}>
                   장시간 활동이 감지되지 않을 경우 연락이 갑니다.
                 </Text>
                 <TextInput
@@ -461,7 +461,7 @@ const SettingsScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.modalHelper, styles.autoTimeHelper, { fontSize: scale(13) }]}>
+              <Text style={[styles.modalHelper, styles.autoTimeHelper, { fontSize: scale(13), lineHeight: scale(18) }]}>
                 이 시각이 되면 그날의 일기가 자동으로 최종 일기로 생성돼요.
               </Text>
 
@@ -691,7 +691,6 @@ const styles = StyleSheet.create({
   },
   modalHelper: {
     color: '#A09B95',
-    lineHeight: 18,
     marginBottom: 12,
   },
   modalInput: {

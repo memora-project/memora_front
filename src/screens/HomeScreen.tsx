@@ -234,7 +234,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             {/* 말풍선 — 이모지에서 말이 나오는 듯 위쪽에 삼각형 꼬리 */}
             <View style={styles.bubbleTail} />
             <View style={styles.bubble}>
-              <Text style={[styles.bubbleText, { fontSize: scale(15) }]}>
+              <Text
+                style={[
+                  styles.bubbleText,
+                  { fontSize: scale(15), lineHeight: scale(22) },
+                ]}
+              >
                 {caseData.bubbleText}
               </Text>
             </View>
@@ -352,7 +357,6 @@ const styles = StyleSheet.create({
   bubbleText: {
     color: '#3D3A37',
     fontWeight: '500',
-    lineHeight: 22,
     textAlign: 'center',
   },
 

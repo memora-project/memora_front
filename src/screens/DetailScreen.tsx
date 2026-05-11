@@ -184,7 +184,7 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
             <Text style={[styles.cardTitle, { fontSize: scale(13) }]}>
               {diary.finalContent ? '오늘의 일기' : 'AI가 정리한 하루'}
             </Text>
-            <Text style={[styles.content, { fontSize: scale(16) }]}>
+            <Text style={[styles.content, { fontSize: scale(16), lineHeight: scale(28) }]}>
               {finalContent}
             </Text>
             {!diary.finalContent && segments.length > 0 && (
@@ -218,7 +218,7 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
                 <Text style={[styles.generateTitle, { fontSize: scale(15) }]}>
                   ✨ AI에게 하루 정리 부탁
                 </Text>
-                <Text style={[styles.generateSubtitle, { fontSize: scale(13) }]}>
+                <Text style={[styles.generateSubtitle, { fontSize: scale(13), lineHeight: scale(18) }]}>
                   오늘 작성하신 {segments.length}개의 기록을 하나의 일기로 묶어드려요
                 </Text>
               </>
@@ -287,7 +287,7 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
 
                   {text.length > 0 && (
                     <Text
-                      style={[styles.segmentText, { fontSize: scale(14) }]}
+                      style={[styles.segmentText, { fontSize: scale(14), lineHeight: scale(22) }]}
                     >
                       {text}
                     </Text>
@@ -400,7 +400,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   content: {
-    lineHeight: 28,
     color: '#2C2A28',
   },
   regenerateBtn: {
@@ -435,7 +434,6 @@ const styles = StyleSheet.create({
   generateSubtitle: {
     color: '#8A857F',
     textAlign: 'center',
-    lineHeight: 18,
   },
 
   segmentsBlock: {
@@ -516,7 +514,6 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     color: '#3D3A37',
-    lineHeight: 22,
   },
 });
 

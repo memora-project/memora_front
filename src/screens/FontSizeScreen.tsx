@@ -39,7 +39,7 @@ const FontSizeScreen: React.FC<FontSizeScreenProps> = ({ navigation }) => {
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.subtitle, { fontSize: scale(14) }]}>
+        <Text style={[styles.subtitle, { fontSize: scale(14), lineHeight: scale(22) }]}>
           앱 전체에 적용할 글씨 크기를 선택해 주세요.
         </Text>
 
@@ -75,7 +75,7 @@ const FontSizeScreen: React.FC<FontSizeScreenProps> = ({ navigation }) => {
           <Text style={[styles.previewBody, { fontSize: scale(16) }]}>
             오늘 하루 어떻게 보내셨나요?
           </Text>
-          <Text style={[styles.previewSub, { fontSize: scale(13) }]}>
+          <Text style={[styles.previewSub, { fontSize: scale(13), lineHeight: scale(20) }]}>
             손주와 함께 일기를 쓰며 추억을 남겨보세요.
           </Text>
         </View>
@@ -124,7 +124,6 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#8A857F',
     marginBottom: 20,
-    lineHeight: 22,
   },
   option: {
     flexDirection: 'row',
@@ -174,7 +173,6 @@ const styles = StyleSheet.create({
   },
   previewSub: {
     color: '#3D3A37',
-    lineHeight: 20,
   },
 });
 

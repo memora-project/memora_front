@@ -151,7 +151,12 @@ const DistrictPicker: React.FC<Props> = ({
           disabled={gpsLoading}
         >
           {gpsLoading ? (
-            <ActivityIndicator size="small" color="#2C2A28" />
+            <>
+              <ActivityIndicator size="small" color="#2C2A28" />
+              <Text style={[styles.gpsBtnText, styles.gpsBtnTextLoading]}>
+                위치를 찾고 있어요…
+              </Text>
+            </>
           ) : (
             <Text style={styles.gpsBtnText}>📍 내 위치로 자동 입력</Text>
           )}
@@ -271,6 +276,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2C2A28',
     fontWeight: '500',
+  },
+  gpsBtnTextLoading: {
+    marginLeft: 8,
   },
   // ── 트리거 ──
   trigger: {
