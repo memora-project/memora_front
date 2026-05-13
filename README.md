@@ -11,7 +11,7 @@
 4/29 MVP v1.0 기준 구현 완료된 기능입니다.
 
 1. **AI 일기 초안 생성 (Generative AI)**
-   - OpenRouter(Google Gemini 2.5 Flash) 연동
+   - OpenRouter(OpenAI GPT-4o) 연동
    - 기분, 사진 정보, 사용자 메모를 조합한 개인화된 서사 생성
 2. **사진 메타데이터 추출 (Native Module)**
    - Android 10+ 의 GPS 마스킹 우회를 위한 커스텀 Kotlin 네이티브 브릿지 구현
@@ -25,7 +25,7 @@
 ## 🛠 Tech Stack
 
 - **Frontend:** React Native 0.85 (TypeScript) + React Navigation
-- **AI Engine:** Google Gemini 2.5 Flash (via OpenRouter API, axios)
+- **AI Engine:** OpenAI GPT-4o (via OpenRouter API, axios)
 - **Local Storage:** AsyncStorage
 - **Image Picker:** `react-native-image-crop-picker` (iOS) + 자체 Kotlin 네이티브 모듈 (Android)
 - **Location:** `@react-native-community/geolocation`
