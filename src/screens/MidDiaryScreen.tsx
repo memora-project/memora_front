@@ -219,7 +219,7 @@ const getDeviceLocation = async (): Promise<DeviceCoords | null> => {
         console.warn('디바이스 위치 가져오기 실패:', err);
         resolve(null);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     );
   });
 };
