@@ -36,12 +36,19 @@ export const setRefreshToken = (token: string | null) => {
   _refreshToken = token;
 };
 
-apiClient.interceptors.request.use(config => {
-  if (_accessToken) {
-    config.headers.Authorization = `Bearer ${_accessToken}`;
-  }
-  return config;
-});
+// synchronous: true — 요청을 보내는 그 순간의 토큰을 붙인다.
+// 기본값(비동기)이면 인터셉터가 다음 tick에 실행돼서, 로그아웃처럼
+// 요청 직후 setAccessToken(null)을 부르는 경우 헤더 없이 나간다.
+apiClient.interceptors.request.use(
+  config => {
+    if (_accessToken) {
+      config.headers.Authorization = `Bearer ${_accessToken}`;
+    }
+    return config;
+  },
+  undefined,
+  { synchronous: true },
+);
 
 // ─────────────────────────────────────────────── 401 → refresh → retry
 
