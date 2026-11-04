@@ -145,7 +145,7 @@ const SettingsScreen: React.FC = () => {
     const digits = userEmergencyContact.replace(/[^0-9+]/g, '');
     try {
       await Linking.openURL(`tel:${digits}`);
-    } catch (e) {
+    } catch {
       Alert.alert(
         '전화 연결 실패',
         '전화 앱을 열 수 없어요. 직접 걸어주세요.',
@@ -183,7 +183,7 @@ const SettingsScreen: React.FC = () => {
           onPress: async () => {
             try {
               await logout();
-            } catch (error) {
+            } catch {
               Alert.alert('오류', '로그아웃 처리 중 문제가 발생했습니다.');
             }
           },

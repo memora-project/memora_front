@@ -1,4 +1,8 @@
-import { apiClient, extractApiErrorMessage } from './client';
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  apiClient,
+  extractApiErrorMessage,
+} from './client';
 
 export interface QuizResponse {
   quizId: number;
@@ -33,7 +37,9 @@ export interface QuizResultResponse {
  */
 export const getQuiz = async (): Promise<QuizResponse> => {
   try {
-    const { data } = await apiClient.get<QuizResponse>('/quiz');
+    const { data } = await apiClient.get<QuizResponse>('/quiz', {
+      timeout: AI_REQUEST_TIMEOUT_MS,
+    });
     return data;
   } catch (e) {
     throw new Error(extractApiErrorMessage(e, '퀴즈를 불러오지 못했습니다.'));

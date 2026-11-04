@@ -1,4 +1,8 @@
-import { apiClient, extractApiErrorMessage } from './client';
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  apiClient,
+  extractApiErrorMessage,
+} from './client';
 import type { MoodType } from '../constants/moods';
 
 /**
@@ -148,6 +152,8 @@ export const generateSegmentAiDraft = async (
   try {
     const { data } = await apiClient.post<SegmentResponse>(
       `/diaries/${diaryId}/segments/${segmentId}/ai-draft`,
+      undefined,
+      { timeout: AI_REQUEST_TIMEOUT_MS },
     );
     return data;
   } catch (e) {

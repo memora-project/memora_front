@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, StyleSheet, ImageSourcePropType } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 import { Text } from './AppText';
 import { useSettings } from '../contexts/SettingsContext';
 

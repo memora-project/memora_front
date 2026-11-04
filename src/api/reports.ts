@@ -1,4 +1,8 @@
-import { apiClient, extractApiErrorMessage } from './client';
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  apiClient,
+  extractApiErrorMessage,
+} from './client';
 import type { MoodType } from '../constants/moods';
 
 /**
@@ -24,7 +28,9 @@ export interface ReportResponse {
 
 export const getWeeklyReport = async (): Promise<ReportResponse> => {
   try {
-    const { data } = await apiClient.get<ReportResponse>('/reports/weekly');
+    const { data } = await apiClient.get<ReportResponse>('/reports/weekly', {
+      timeout: AI_REQUEST_TIMEOUT_MS,
+    });
     return data;
   } catch (e) {
     throw new Error(extractApiErrorMessage(e, '주간 리포트를 불러오지 못했습니다.'));
@@ -33,7 +39,9 @@ export const getWeeklyReport = async (): Promise<ReportResponse> => {
 
 export const getMonthlyReport = async (): Promise<ReportResponse> => {
   try {
-    const { data } = await apiClient.get<ReportResponse>('/reports/monthly');
+    const { data } = await apiClient.get<ReportResponse>('/reports/monthly', {
+      timeout: AI_REQUEST_TIMEOUT_MS,
+    });
     return data;
   } catch (e) {
     throw new Error(extractApiErrorMessage(e, '월간 리포트를 불러오지 못했습니다.'));

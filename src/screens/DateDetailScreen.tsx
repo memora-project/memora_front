@@ -20,7 +20,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import {
   getDiariesByMonth,
   updateDiary,
-  deleteDiary,
   deleteFinalDiary,
   type DiaryResponse,
 } from '../api/diaries';
@@ -152,7 +151,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
         setIsLoading(true);
         try {
           await reload();
-        } catch (e) {
+        } catch {
           if (!cancelled) {
             setDiary(null);
             setSegments([]);

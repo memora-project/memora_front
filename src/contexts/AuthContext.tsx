@@ -306,8 +306,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 
   const logout = useCallback(async () => {
-    // 백엔드에 logout 요청 — DB의 refresh token 무효화. 실패해도 클라이언트는 진행.
-    await apiLogout();
+    // 서버 응답을 기다리지 않는다. 백엔드가 꺼져 있어도 로컬 로그아웃과
+    // 로그인 화면 전환은 즉시 이뤄져야 한다.
+    void apiLogout();
+
+    // 저장소 I/O보다 먼저 메모리 상태를 비워 화면을 즉시 전환한다.
+    setAccessToken(null);
+    setRefreshToken(null);
+    setIsLoggedIn(false);
+    setUserEmail(null);
+    setUserName(null);
+    setUserGender(null);
+    setUserBirthDate(null);
+    setUserAddress(null);
+    setUserPhoneNumber(null);
+    setUserEmergencyContact(null);
+    setUserCreatedAt(null);
+    setUserNickname(null);
+    setUserGrandchildPhotoUrl(null);
 
     try {
       await AsyncStorage.multiRemove([
@@ -324,19 +340,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         STORAGE_KEYS.USER_NICKNAME,
         STORAGE_KEYS.USER_GRANDCHILD_PHOTO,
       ]);
-      setAccessToken(null);
-      setRefreshToken(null);
-      setIsLoggedIn(false);
-      setUserEmail(null);
-      setUserName(null);
-      setUserGender(null);
-      setUserBirthDate(null);
-      setUserAddress(null);
-      setUserPhoneNumber(null);
-      setUserEmergencyContact(null);
-      setUserCreatedAt(null);
-      setUserNickname(null);
-      setUserGrandchildPhotoUrl(null);
     } catch (error) {
       console.error('로그아웃 실패:', error);
       throw error;

@@ -1,4 +1,8 @@
-import { apiClient, extractApiErrorMessage } from './client';
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  apiClient,
+  extractApiErrorMessage,
+} from './client';
 import type { DiaryResponse } from './diaries';
 import type { SegmentResponse } from './segments';
 
@@ -24,7 +28,7 @@ export const generateSegmentAiDraft = async (
       `/diaries/${diaryId}/segments/${segmentId}/ai-draft`,
       // body 없음. AI 호출은 30초까지 걸릴 수 있어서 timeout 늘림.
       undefined,
-      { timeout: 45000 },
+      { timeout: AI_REQUEST_TIMEOUT_MS },
     );
     return data;
   } catch (e) {
@@ -46,7 +50,7 @@ export const generateDiaryAiDraft = async (
     const { data } = await apiClient.post<DiaryResponse>(
       `/diaries/${diaryId}/ai-draft`,
       undefined,
-      { timeout: 60000 },
+      { timeout: AI_REQUEST_TIMEOUT_MS },
     );
     return data;
   } catch (e) {

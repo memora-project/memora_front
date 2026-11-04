@@ -24,7 +24,8 @@ import Geolocation from '@react-native-community/geolocation';
 
 import type { MidDiaryScreenProps } from '../navigation/AppNavigator';
 import { pickImageWithExif } from '../native/PhotoExif';
-import { createTodayDiary, type MoodType } from '../api/diaries';
+import { createTodayDiary } from '../api/diaries';
+import type { MoodType } from '../constants/moods';
 import { createSegment, updateSegment, deleteSegment } from '../api/segments';
 import { generateSegmentAiDraft } from '../api/aiDiary';
 import { uploadImage } from '../api/files';
@@ -247,6 +248,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
   const [diaryText, setDiaryText] = useState<string>('');
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationRequestId, setGenerationRequestId] = useState(0);
 
   // 백엔드 연동 상태
   // - diaryId: 화면 진입 시 createTodayDiary로 받음 (오늘 날짜 diary 1개, 이미 있으면 기존 거)
@@ -399,7 +401,7 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
     return () => {
       cancelled = true;
     };
-  }, [step, diaryId, segmentId, diaryText]);
+  }, [step, diaryId, segmentId, diaryText, generationRequestId]);
 
   const handleMoodSelect = (mood: Mood) => {
     setSelectedMood(mood);
@@ -764,9 +766,10 @@ const MidDiaryScreen: React.FC<MidDiaryScreenProps> = ({ navigation }) => {
 
   const handleRegenerateAI = () => {
     closeEditMenu();
-    // diaryText를 비우면 Step 3 useEffect가 다시 동작해서
-    // 같은 segmentId로 generateSegmentAiDraft를 재호출 → 새 초안 받음.
+    // 첫 생성 실패 후 diaryText가 이미 빈 문자열이어도 재요청이 실행되도록
+    // 별도의 요청 번호를 증가시킨다.
     setDiaryText('');
+    setGenerationRequestId(requestId => requestId + 1);
   };
 
   const handleBack = () => {
@@ -1257,7 +1260,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   thumbnailOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',

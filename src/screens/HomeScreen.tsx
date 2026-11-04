@@ -58,7 +58,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           setDiary(d);
           const segs = await getSegments(d.diaryId);
           if (!cancelled) setSegments(segs);
-        } catch (e) {
+        } catch {
           // 네트워크/인증 실패 등 — 빈 상태로 두면 케이스 A로 표시됨.
           if (!cancelled) {
             setDiary(null);

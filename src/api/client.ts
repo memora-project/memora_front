@@ -6,6 +6,9 @@ export interface ApiErrorPayload {
   message?: string;
 }
 
+// Gemini 주 모델과 대체 모델 호출 시간을 모두 기다릴 수 있도록 AI 요청에만 적용.
+export const AI_REQUEST_TIMEOUT_MS = 120000;
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,

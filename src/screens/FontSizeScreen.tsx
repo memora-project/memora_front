@@ -19,7 +19,7 @@ const FontSizeScreen: React.FC<FontSizeScreenProps> = ({ navigation }) => {
     if (size === fontSize) return;
     try {
       await setFontSize(size);
-    } catch (error) {
+    } catch {
       Alert.alert('오류', '글씨 크기 저장에 실패했습니다.');
     }
   };

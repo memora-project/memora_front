@@ -1,4 +1,8 @@
-import { apiClient, extractApiErrorMessage } from './client';
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  apiClient,
+  extractApiErrorMessage,
+} from './client';
 import type { MoodType } from '../constants/moods';
 
 export type DiaryStatus = 'IN_PROGRESS' | 'COMPLETED';
@@ -138,6 +142,8 @@ export const generateFinalAiDraft = async (
   try {
     const { data } = await apiClient.post<DiaryResponse>(
       `/diaries/${diaryId}/ai-draft`,
+      undefined,
+      { timeout: AI_REQUEST_TIMEOUT_MS },
     );
     return data;
   } catch (e) {

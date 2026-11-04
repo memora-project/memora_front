@@ -61,7 +61,6 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const [step, setStep] = useState<Step>(1);
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [diaryText, setDiaryText] = useState('');
-  const [originalAiDraft, setOriginalAiDraft] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedModalVisible, setSavedModalVisible] = useState(false);
@@ -112,7 +111,6 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
         const draft = formatAIText(diary.aiDraft ?? '');
         if (!cancelled) {
           setDiaryText(draft);
-          setOriginalAiDraft(draft);
         }
       } catch (e: any) {
         console.warn('최종 일기 AI 생성 실패:', e);
@@ -122,7 +120,6 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
             `${e?.message ?? '알 수 없는 오류'}\n\n직접 작성해주세요.`,
           );
           setDiaryText('');
-          setOriginalAiDraft('');
         }
       } finally {
         if (!cancelled) setIsGenerating(false);
@@ -179,7 +176,6 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const handleRestartFromMood = () => {
     setEditMenuVisible(false);
     setDiaryText('');
-    setOriginalAiDraft('');
     setStep(1);
   };
 
@@ -187,7 +183,6 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
     setEditMenuVisible(false);
     // diaryText 비우면 step 2 useEffect가 generateFinalAiDraft를 다시 호출.
     setDiaryText('');
-    setOriginalAiDraft('');
   };
 
   const renderTopBar = () => (

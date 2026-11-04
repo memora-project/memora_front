@@ -131,7 +131,7 @@ export const lookupCurrentDistrict = async (): Promise<LookupResult> => {
   let coords: DeviceCoords | null;
   try {
     coords = await getDeviceCoords();
-  } catch (e) {
+  } catch {
     return { kind: 'permission_denied' };
   }
   if (!coords) {

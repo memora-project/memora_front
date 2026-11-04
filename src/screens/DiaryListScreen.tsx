@@ -80,7 +80,7 @@ const DiaryListScreen: React.FC<DiaryListMainScreenProps> = ({ navigation }) => 
             map[date] = has;
           });
           setHasContentMap(map);
-        } catch (e) {
+        } catch {
           if (!cancelled) {
             setDiaries([]);
             setHasContentMap({});

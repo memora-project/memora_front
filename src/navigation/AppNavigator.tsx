@@ -228,7 +228,7 @@ const MainTabNavigator = () => {
         name="Home"
         component={DiaryStackNavigator}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <Icon name="home-outline" size={28} color={color} />
           ),
         }}
@@ -237,7 +237,7 @@ const MainTabNavigator = () => {
         name="DiaryList"
         component={DiaryListStackNavigator}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <Icon name="book-outline" size={28} color={color} />
           ),
         }}
@@ -246,7 +246,7 @@ const MainTabNavigator = () => {
         name="Report"
         component={ReportScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <Icon name="stats-chart-outline" size={28} color={color} />
           ),
         }}
