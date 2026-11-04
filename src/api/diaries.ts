@@ -30,17 +30,36 @@ export interface DiaryUpdateRequest {
   finalContent?: string;
 }
 
-/**
- * POST /diaries — 오늘 날짜로 일기 생성. 이미 있으면 기존 일기 반환.
- * 1일 1개 강제. 중간 기록(Segment)은 이 일기 ID 아래에 추가됨.
- */
-export const createTodayDiary = async (): Promise<DiaryResponse> => {
+/** 진행 중인 POST /diaries 요청. 같은 요청이 겹치면 이 Promise를 같이 기다린다. */
+let pendingCreateTodayDiary: Promise<DiaryResponse> | null = null;
+
+const requestCreateTodayDiary = async (): Promise<DiaryResponse> => {
   try {
     const { data } = await apiClient.post<DiaryResponse>('/diaries');
     return data;
   } catch (e) {
     throw new Error(extractApiErrorMessage(e, '오늘 일기를 시작할 수 없어요.'));
   }
+};
+
+/**
+ * POST /diaries — 오늘 날짜로 일기 생성. 이미 있으면 기존 일기 반환.
+ * 1일 1개 강제. 중간 기록(Segment)은 이 일기 ID 아래에 추가됨.
+ *
+ * Home focus 등으로 요청이 동시에 여러 번 들어오면 서버에 한 번만 보내고
+ * 결과(성공/실패)를 같이 받는다. 요청이 끝나면 다음 호출은 새로 보낸다.
+ */
+export const createTodayDiary = (): Promise<DiaryResponse> => {
+  if (pendingCreateTodayDiary) return pendingCreateTodayDiary;
+
+  const request = requestCreateTodayDiary();
+  pendingCreateTodayDiary = request;
+  const clear = () => {
+    if (pendingCreateTodayDiary === request) pendingCreateTodayDiary = null;
+  };
+  // then(성공, 실패) 둘 다 clear — 여기서 만든 Promise는 reject되지 않으므로 unhandled 경고 없음.
+  request.then(clear, clear);
+  return request;
 };
 
 /**
