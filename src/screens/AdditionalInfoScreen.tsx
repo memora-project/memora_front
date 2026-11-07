@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   TextInput,
@@ -13,6 +13,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import BirthdatePicker from '../components/BirthdatePicker';
 import DistrictPicker from '../components/DistrictPicker';
 import type { District } from '../constants/districts';
+import KakaoLoginModal from '../components/KakaoLoginModal';
+import { useKakaoLoginFlow } from '../hooks/useKakaoLoginFlow';
 import { useAuth, type Gender } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -34,6 +36,7 @@ const AdditionalInfoScreen: React.FC = () => {
     completeAdditionalInfo,
   } = useAuth();
   const { scale } = useSettings();
+  const kakao = useKakaoLoginFlow();
 
   const [name, setName] = useState(userName ?? '');
   const [gender, setGender] = useState<Gender | ''>(userGender ?? '');
@@ -42,6 +45,19 @@ const AdditionalInfoScreen: React.FC = () => {
   const [address, setAddress] = useState(userAddress ?? '');
   const [emergencyContact, setEmergencyContact] = useState(userEmergencyContact ?? '');
   const [saving, setSaving] = useState(false);
+
+  // The cached profile may arrive after this screen mounts during session restore.
+  // Fill only empty inputs so an in-progress edit is never overwritten.
+  useEffect(() => {
+    if ((!name || name === '카카오 사용자') && userName && userName !== '카카오 사용자') setName(userName);
+    if (!gender && userGender) setGender(userGender);
+    if (!birthDate && userBirthDate) setBirthDate(userBirthDate);
+    if (!phoneNumber && userPhoneNumber) setPhoneNumber(userPhoneNumber);
+    if (!address && userAddress) setAddress(userAddress);
+    if (!emergencyContact && userEmergencyContact) setEmergencyContact(userEmergencyContact);
+  }, [name, userName, gender, userGender, birthDate, userBirthDate,
+    phoneNumber, userPhoneNumber, address, userAddress,
+    emergencyContact, userEmergencyContact]);
 
   const formatPhone = (text: string): string => {
     const digits = text.replace(/[^0-9]/g, '').slice(0, 11);
@@ -141,6 +157,12 @@ const AdditionalInfoScreen: React.FC = () => {
           서비스 이용을 위해{'\n'}몇 가지만 더 알려주세요.
         </Text>
 
+        <TouchableOpacity style={styles.kakaoReloadBtn} onPress={kakao.start} disabled={kakao.busy}>
+          <Text style={styles.kakaoReloadText}>
+            {kakao.busy ? '카카오 정보 확인 중...' : '카카오 정보 다시 불러오기'}
+          </Text>
+        </TouchableOpacity>
+
         {/* 이름 */}
         <View style={styles.inputWrap}>
           <Text style={[styles.inputLabel, { fontSize: scale(15) }]}>
@@ -236,6 +258,12 @@ const AdditionalInfoScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
+      <KakaoLoginModal
+        visible={kakao.visible}
+        scopes={kakao.scopes}
+        onClose={kakao.close}
+        onSuccess={kakao.onCode}
+      />
     </SafeAreaView>
   );
 };
@@ -263,6 +291,18 @@ const styles = StyleSheet.create({
   intro: {
     color: '#5C5852',
     marginBottom: 22,
+  },
+  kakaoReloadBtn: {
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D9D3CA',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginBottom: 20,
+  },
+  kakaoReloadText: {
+    color: '#2C2A28',
+    fontWeight: '600',
   },
   inputWrap: {
     marginBottom: 18,

@@ -16,10 +16,9 @@ import type { LoginScreenProps } from '../navigation/AppNavigator';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { login as apiLogin, kakaoLogin as apiKakaoLogin } from '../api/auth';
+import { login as apiLogin } from '../api/auth';
 import KakaoLoginModal from '../components/KakaoLoginModal';
-// @ts-ignore — react-native-dotenv 런타임 변수
-import { KAKAO_REDIRECT_URI } from '@env';
+import { useKakaoLoginFlow } from '../hooks/useKakaoLoginFlow';
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const { login } = useAuth();
@@ -27,34 +26,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [kakaoModalVisible, setKakaoModalVisible] = useState(false);
-  const [isKakaoExchanging, setIsKakaoExchanging] = useState(false);
-
-  /**
-   * 카카오 WebView가 인가코드를 가로채면 호출됨.
-   * 백엔드에 code + redirectUri를 보내 우리 JWT를 받고 AuthContext.login으로 자동 메인 진입.
-   */
-  const handleKakaoCode = async (code: string) => {
-    setKakaoModalVisible(false);
-    setIsKakaoExchanging(true);
-    try {
-      const tokens = await apiKakaoLogin({
-        code,
-        redirectUri: KAKAO_REDIRECT_URI,
-      });
-      // 카카오 가입자는 우리 loginId가 'kakao_{id}' 형식. 표시용으로 그것을 그대로 넘김.
-      // (백엔드 /users/me 응답에서 진짜 loginId가 다시 채워져 덮어씀)
-      await login('', tokens.accessToken, tokens.refreshToken);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : '카카오 로그인 처리 중 오류가 발생했습니다.';
-      Alert.alert('카카오 로그인 실패', message);
-    } finally {
-      setIsKakaoExchanging(false);
-    }
-  };
+  const kakao = useKakaoLoginFlow();
 
   const handleLogin = async () => {
     if (isLoading) return;
@@ -158,13 +130,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               </View>
 
               <TouchableOpacity
-                style={[styles.kakaoBtn, isKakaoExchanging && styles.loginBtnDisabled]}
-                onPress={() => setKakaoModalVisible(true)}
+                style={[styles.kakaoBtn, kakao.busy && styles.loginBtnDisabled]}
+                onPress={kakao.start}
                 activeOpacity={0.85}
-                disabled={isKakaoExchanging || isLoading}
+                disabled={kakao.busy || isLoading}
               >
                 <Text style={[styles.kakaoBtnText, { fontSize: scale(17) }]}>
-                  {isKakaoExchanging ? '카카오 로그인 처리 중...' : '카카오로 시작하기'}
+                  {kakao.busy ? '카카오 로그인 처리 중...' : '카카오로 시작하기'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -185,9 +157,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       </KeyboardAwareScrollView>
 
       <KakaoLoginModal
-        visible={kakaoModalVisible}
-        onClose={() => setKakaoModalVisible(false)}
-        onSuccess={handleKakaoCode}
+        visible={kakao.visible}
+        scopes={kakao.scopes}
+        onClose={kakao.close}
+        onSuccess={kakao.onCode}
       />
     </SafeAreaView>
   );

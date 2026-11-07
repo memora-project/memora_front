@@ -26,13 +26,14 @@ import { KAKAO_REST_API_KEY, KAKAO_REDIRECT_URI } from '@env';
  */
 type Props = {
   visible: boolean;
+  scopes?: string[];
   onClose: () => void;
   onSuccess: (code: string) => void;
 };
 
 const KAKAO_AUTH_URL = 'https://kauth.kakao.com/oauth/authorize';
 
-const KakaoLoginModal: React.FC<Props> = ({ visible, onClose, onSuccess }) => {
+const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuccess }) => {
   const webRef = useRef<WebView>(null);
   const consumedRef = useRef(false);
 
@@ -44,10 +45,11 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, onClose, onSuccess }) => {
       client_id: KAKAO_REST_API_KEY ?? '',
       redirect_uri: KAKAO_REDIRECT_URI ?? '',
     });
+    if (scopes.length > 0) params.set('scope', scopes.join(','));
     return `${KAKAO_AUTH_URL}?${params.toString()}`;
     // visible이 false→true로 바뀔 때만 다시 계산되도록 의존성에 visible 포함.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, scopes.join(',')]);
 
   const tryConsumeRedirect = (url: string): boolean => {
     if (!url.startsWith(KAKAO_REDIRECT_URI ?? '__never__')) return false;
@@ -118,6 +120,7 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, onClose, onSuccess }) => {
           </View>
         ) : (
           <WebView
+            key={authUrl}
             ref={webRef}
             source={{ uri: authUrl }}
             onShouldStartLoadWithRequest={onShouldStart}

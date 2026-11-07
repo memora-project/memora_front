@@ -21,6 +21,8 @@ export interface SignupRequest {
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+  /** Kakao scopes still requiring consent; returned only by /auth/kakao. */
+  additionalConsentScopes?: string[];
 }
 
 /**
