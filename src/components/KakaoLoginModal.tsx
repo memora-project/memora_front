@@ -123,8 +123,30 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuc
             key={authUrl}
             ref={webRef}
             source={{ uri: authUrl }}
-            onShouldStartLoadWithRequest={onShouldStart}
+            // Android implements this callback by synchronously waiting for the
+            // JavaScript bridge. On slower devices that wait can stall the very
+            // first Kakao page (and previously timed out on the redirect). Let
+            // Android navigate normally and consume the HTTPS redirect from the
+            // non-blocking load/navigation events instead.
+            onShouldStartLoadWithRequest={
+              Platform.OS === 'ios' ? onShouldStart : undefined
+            }
+            onLoadStart={event => {
+              tryConsumeRedirect(event.nativeEvent.url);
+            }}
             onNavigationStateChange={onNavStateChange}
+            onError={event => {
+              const { code, description, url } = event.nativeEvent;
+              console.warn('[Kakao] WebView load failed:', {
+                code,
+                description,
+                url,
+              });
+            }}
+            onHttpError={event => {
+              const { statusCode, url } = event.nativeEvent;
+              console.warn('[Kakao] WebView HTTP error:', { statusCode, url });
+            }}
             javaScriptEnabled
             domStorageEnabled
             // 카카오 로그인 페이지가 자체 user-agent 검사를 걸기도 해서 기본값 사용
