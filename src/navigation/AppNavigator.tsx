@@ -30,7 +30,6 @@ import SettingsScreen from '../screens/SettingsScreen';
 // 인증 화면들
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
-import AdditionalInfoScreen from '../screens/AdditionalInfoScreen';
 
 // 인증 컨텍스트
 import { useAuth } from '../contexts/AuthContext';
@@ -276,7 +275,7 @@ const MainTabNavigator = () => {
  * ─────────────────────────────────────────────
  */
 const AppNavigator = () => {
-  const { isLoggedIn, isLoading, needsAdditionalInfo } = useAuth();
+  const { isLoggedIn, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -286,19 +285,13 @@ const AppNavigator = () => {
     );
   }
 
-  // 로그인 안 됨 → 로그인/회원가입 스택
-  // 로그인됐지만 필수 정보 미완성 → 추가정보 입력 화면 강제 (카카오 가입자 첫 진입)
-  // 로그인 + 정보 다 채워짐 → 메인 탭
-  let content: React.ReactNode;
-  if (!isLoggedIn) {
-    content = <AuthStackNavigator />;
-  } else if (needsAdditionalInfo) {
-    content = <AdditionalInfoScreen />;
-  } else {
-    content = <MainTabNavigator />;
-  }
-
-  return <NavigationContainer>{content}</NavigationContainer>;
+  // 로그인에 성공하면 프로필의 선택 정보가 비어 있어도 메인 화면으로
+  // 진입한다. 부족한 정보는 설정/프로필에서 나중에 입력할 수 있다.
+  return (
+    <NavigationContainer>
+      {isLoggedIn ? <MainTabNavigator /> : <AuthStackNavigator />}
+    </NavigationContainer>
+  );
 };
 
 const styles = StyleSheet.create({

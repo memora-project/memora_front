@@ -32,6 +32,7 @@ type Props = {
 };
 
 const KAKAO_AUTH_URL = 'https://kauth.kakao.com/oauth/authorize';
+const DEFAULT_KAKAO_SCOPES = ['profile_nickname'];
 
 const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuccess }) => {
   const webRef = useRef<WebView>(null);
@@ -45,7 +46,14 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuc
       client_id: KAKAO_REST_API_KEY ?? '',
       redirect_uri: KAKAO_REDIRECT_URI ?? '',
     });
-    if (scopes.length > 0) params.set('scope', scopes.join(','));
+    // The current Kakao app can use the public profile nickname scope, while
+    // personal fields such as gender, birthday, birthyear, name, and phone
+    // require permissions this app does not have. Requesting unavailable
+    // scopes makes Kakao reject the whole login with KOE205.
+    const requestedScopes = Array.from(
+      new Set([...DEFAULT_KAKAO_SCOPES, ...scopes]),
+    );
+    params.set('scope', requestedScopes.join(','));
     return `${KAKAO_AUTH_URL}?${params.toString()}`;
     // visible이 false→true로 바뀔 때만 다시 계산되도록 의존성에 visible 포함.
     // eslint-disable-next-line react-hooks/exhaustive-deps
