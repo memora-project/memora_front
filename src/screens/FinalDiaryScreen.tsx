@@ -22,6 +22,7 @@ import {
 import { moodKeyToServer } from '../utils/moodMapper';
 import { useSettings } from '../contexts/SettingsContext';
 import SuccessModal from '../components/SuccessModal';
+import { withExactDiaryDate } from '../utils/finalDiaryText';
 
 type Step = 1 | 2;
 
@@ -43,18 +44,6 @@ const MOODS: Mood[] = [
   { key: 'angry', label: '화남', emoji: '😠' },
   { key: 'sick', label: '아픔', emoji: '🤒' },
 ];
-
-/**
- * AI 응답이 한 덩어리로 오는 경우 마침표/물음표/느낌표 뒤에 줄바꿈을 넣어
- * 문장별로 분리한다. 어르신 가독성용.
- */
-const formatAIText = (text: string): string => {
-  if (!text) return text;
-  if (text.includes('\n')) {
-    return text.replace(/\n{2,}/g, '\n');
-  }
-  return text.replace(/([.!?])\s+/g, '$1\n').trim();
-};
 
 const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
   const { scale } = useSettings();
@@ -108,7 +97,7 @@ const FinalDiaryScreen: React.FC<FinalDiaryScreenProps> = ({ navigation }) => {
       setIsGenerating(true);
       try {
         const diary = await generateFinalAiDraft(diaryId);
-        const draft = formatAIText(diary.aiDraft ?? '');
+        const draft = withExactDiaryDate(diary.aiDraft ?? '', diary.targetDate);
         if (!cancelled) {
           setDiaryText(draft);
         }

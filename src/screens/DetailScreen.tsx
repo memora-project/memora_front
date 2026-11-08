@@ -23,6 +23,7 @@ import { getSegments, type SegmentResponse } from '../api/segments';
 import { generateDiaryAiDraft } from '../api/aiDiary';
 import { MOOD_INFO } from '../constants/moods';
 import { useSettings } from '../contexts/SettingsContext';
+import { withExactDiaryDate } from '../utils/finalDiaryText';
 
 const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
   const { diaryId } = route.params;
@@ -132,7 +133,10 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
   }
 
   const finalMoodInfo = diary.finalMood ? MOOD_INFO[diary.finalMood] : null;
-  const finalContent = diary.finalContent ?? diary.aiDraft;
+  const rawFinalContent = diary.finalContent ?? diary.aiDraft;
+  const finalContent = rawFinalContent
+    ? withExactDiaryDate(rawFinalContent, diary.targetDate)
+    : rawFinalContent;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

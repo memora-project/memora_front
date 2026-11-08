@@ -31,6 +31,7 @@ import {
 import { MOOD_INFO } from '../constants/moods';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import AuthenticatedImage from '../components/AuthenticatedImage';
+import { withExactDiaryDate } from '../utils/finalDiaryText';
 import type { DateDetailScreenProps } from '../navigation/AppNavigator';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -92,8 +93,10 @@ const collectSegmentPhotos = (s: SegmentResponse): string[] => {
 const segmentBody = (s: SegmentResponse): string =>
   (s.isEdited ? s.userContent : s.aiDraft) ?? '';
 
-const diaryBody = (d: DiaryResponse): string =>
-  (d.isEdited ? d.finalContent : d.aiDraft) ?? '';
+const diaryBody = (d: DiaryResponse): string => {
+  const body = (d.isEdited ? d.finalContent : d.aiDraft) ?? '';
+  return body ? withExactDiaryDate(body, d.targetDate) : '';
+};
 
 /**
  * 한 덩어리로 저장된 옛 일기들도 화면에 보일 때 자동 문단 분리.
