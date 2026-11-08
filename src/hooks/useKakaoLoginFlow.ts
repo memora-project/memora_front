@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { KAKAO_REDIRECT_URI } from '@env';
+import { API_BASE_URL, KAKAO_REDIRECT_URI } from '@env';
 import { kakaoLogin, type AuthTokens } from '../api/auth';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -12,10 +12,43 @@ export const useKakaoLoginFlow = () => {
   const [busy, setBusy] = useState(false);
   const pendingTokens = useRef<AuthTokens | null>(null);
 
-  const start = () => {
-    pendingTokens.current = null;
-    setScopes([]);
-    setVisible(true);
+  const start = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // Render Free may be asleep. Wake it before issuing a one-time Kakao
+      // authorization code so the code is not lost while the server boots.
+      const serverOrigin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      try {
+        const response = await fetch(`${serverOrigin}/actuator/health`, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`서버 상태 확인 실패 (HTTP ${response.status})`);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      pendingTokens.current = null;
+      setScopes([]);
+      setVisible(true);
+    } catch (error) {
+      const timedOut =
+        error instanceof Error && error.name === 'AbortError';
+      Alert.alert(
+        '서버 연결 중',
+        timedOut
+          ? '서버를 시작하는 데 시간이 걸리고 있습니다. 잠시 후 카카오 로그인을 다시 눌러 주세요.'
+          : '서버에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.',
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   const close = () => {
