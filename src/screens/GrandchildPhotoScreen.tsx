@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Alert,
   ActivityIndicator,
   Platform,
@@ -17,8 +16,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { uploadImage, imageSource } from '../api/files';
+import { uploadImage } from '../api/files';
 import type { SettingsStackParamList } from '../navigation/AppNavigator';
+import AuthenticatedImage from '../components/AuthenticatedImage';
 
 type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'GrandchildPhoto'>;
 
@@ -175,8 +175,8 @@ const GrandchildPhotoScreen: React.FC = () => {
       <View style={styles.content}>
         <View style={styles.previewWrap}>
           {userGrandchildPhotoUrl && !photoFailed ? (
-            <Image
-              source={imageSource(userGrandchildPhotoUrl)}
+            <AuthenticatedImage
+              path={userGrandchildPhotoUrl}
               style={styles.preview}
               resizeMode="cover"
               onError={({ nativeEvent }) => {

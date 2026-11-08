@@ -1,8 +1,8 @@
-import { imageSource } from '../api/files';
 import React, { useEffect, useState } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text } from './AppText';
 import { useSettings } from '../contexts/SettingsContext';
+import AuthenticatedImage from './AuthenticatedImage';
 
 export type GrandchildMood = 'happy' | 'caring' | 'curious' | 'cheering';
 export type GrandchildGender = 'grandson' | 'granddaughter';
@@ -75,8 +75,8 @@ const Grandchild: React.FC<Props> = ({
       >
         {hasPhoto && !photoFailed ? (
           // 사진이 있으면 사진 표시
-          <Image
-            source={imageSource(photoUri)}
+          <AuthenticatedImage
+            path={photoUri}
             style={[
               styles.photo,
               {

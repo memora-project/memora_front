@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { HomeScreenProps } from '../navigation/AppNavigator';
 import { createTodayDiary, type DiaryResponse } from '../api/diaries';
 import { getSegments, type SegmentResponse } from '../api/segments';
-import { imageSource } from '../api/files';
+import AuthenticatedImage from '../components/AuthenticatedImage';
 import { MOOD_INFO } from '../constants/moods';
 import { moodServerToKey } from '../utils/moodMapper';
 import {
@@ -207,8 +206,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.content}>
             <View style={styles.avatarWrap}>
               {caseData.photoUrl ? (
-                <Image
-                  source={imageSource(caseData.photoUrl)}
+                <AuthenticatedImage
+                  path={caseData.photoUrl}
                   style={styles.bigPhoto}
                   resizeMode="cover"
                 />

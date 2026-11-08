@@ -9,7 +9,6 @@ import {
   Modal,
   TextInput,
   Platform,
-  Image,
   Dimensions,
 } from 'react-native';
 import { Text } from '../components/AppText';
@@ -29,7 +28,6 @@ import {
   deleteSegment,
   type SegmentResponse,
 } from '../api/segments';
-import { imageSource } from '../api/files';
 import { MOOD_INFO } from '../constants/moods';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import AuthenticatedImage from '../components/AuthenticatedImage';
@@ -378,8 +376,8 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                           })
                         }
                       >
-                        <Image
-                          source={imageSource(url)}
+                        <AuthenticatedImage
+                          path={url}
                           style={styles.cardPhotoThumb}
                           resizeMode="cover"
                         />

@@ -4,13 +4,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   ScrollView,
 } from 'react-native';
 import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../contexts/SettingsContext';
-import { imageSource } from '../api/files';
+import AuthenticatedImage from '../components/AuthenticatedImage';
 import {
   getQuiz,
   submitQuizAnswer,
@@ -152,8 +151,8 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* 사진 */}
-        <Image
-          source={imageSource(quiz.photoUrl)}
+        <AuthenticatedImage
+          path={quiz.photoUrl}
           style={styles.photo}
           resizeMode="cover"
         />
