@@ -29,9 +29,10 @@ import {
   deleteSegment,
   type SegmentResponse,
 } from '../api/segments';
-import { resolveImageUrl } from '../api/files';
+import { imageSource } from '../api/files';
 import { MOOD_INFO } from '../constants/moods';
 import PhotoViewerModal from '../components/PhotoViewerModal';
+import AuthenticatedImage from '../components/AuthenticatedImage';
 import type { DateDetailScreenProps } from '../navigation/AppNavigator';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -378,7 +379,7 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
                         }
                       >
                         <Image
-                          source={{ uri: resolveImageUrl(url) }}
+                          source={imageSource(url)}
                           style={styles.cardPhotoThumb}
                           resizeMode="cover"
                         />
@@ -468,31 +469,39 @@ const DateDetailScreen: React.FC<DateDetailScreenProps> = ({
 
                 {actionCard && actionCard.photos.length > 0 && (
                   <View style={styles.carouselWrap}>
-                    <ScrollView
-                      horizontal
-                      pagingEnabled
-                      showsHorizontalScrollIndicator={false}
-                      decelerationRate="fast"
-                    >
-                      {actionCard.photos.map((url, idx) => (
-                        <TouchableOpacity
-                          key={`viewer-${idx}`}
-                          activeOpacity={0.85}
-                          onPress={() =>
-                            setPhotoViewer({
-                              photos: actionCard.photos,
-                              startIndex: idx,
-                            })
-                          }
-                        >
-                          <Image
-                            source={{ uri: resolveImageUrl(url) }}
-                            style={styles.carouselImage}
-                            resizeMode="cover"
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                    {actionCard.photos.length === 1 ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setPhotoViewer({ photos: actionCard.photos, startIndex: 0 })}
+                      >
+                        <AuthenticatedImage
+                          path={actionCard.photos[0]}
+                          style={styles.carouselImage}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ) : (
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        decelerationRate="fast"
+                      >
+                        {actionCard.photos.map((url, idx) => (
+                          <TouchableOpacity
+                            key={`viewer-${idx}`}
+                            activeOpacity={0.85}
+                            onPress={() => setPhotoViewer({ photos: actionCard.photos, startIndex: idx })}
+                          >
+                            <AuthenticatedImage
+                              path={url}
+                              style={styles.carouselImage}
+                              resizeMode="cover"
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
                     {actionCard.photos.length > 1 && (
                       <Text
                         style={[styles.carouselHint, { fontSize: scale(12) }]}

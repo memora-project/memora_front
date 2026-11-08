@@ -4,12 +4,11 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  Image,
   StyleSheet,
   Dimensions,
 } from 'react-native';
 import { Text } from './AppText';
-import { resolveImageUrl } from '../api/files';
+import AuthenticatedImage from './AuthenticatedImage';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -54,8 +53,8 @@ const PhotoViewerModal: React.FC<Props> = ({
           >
             {photos.map((url, idx) => (
               <View key={`viewer-${idx}`} style={styles.page}>
-                <Image
-                  source={{ uri: resolveImageUrl(url) }}
+                <AuthenticatedImage
+                  path={url}
                   style={styles.image}
                   resizeMode="contain"
                 />

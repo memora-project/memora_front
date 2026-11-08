@@ -1,4 +1,5 @@
-import React from 'react';
+import { imageSource } from '../api/files';
+import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet } from 'react-native';
 import { Text } from './AppText';
 import { useSettings } from '../contexts/SettingsContext';
@@ -50,6 +51,11 @@ const Grandchild: React.FC<Props> = ({
 }) => {
   const { scale } = useSettings();
   const sizeConfig = SIZE_MAP[size];
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [photoUri]);
 
   // 사진이 있는지 판단
   const hasPhoto = photoUri && typeof photoUri === 'string' && photoUri.length > 0;
@@ -67,10 +73,10 @@ const Grandchild: React.FC<Props> = ({
           },
         ]}
       >
-        {hasPhoto ? (
+        {hasPhoto && !photoFailed ? (
           // 사진이 있으면 사진 표시
           <Image
-            source={{ uri: photoUri as string }}
+            source={imageSource(photoUri)}
             style={[
               styles.photo,
               {
@@ -80,6 +86,10 @@ const Grandchild: React.FC<Props> = ({
               },
             ]}
             resizeMode="cover"
+            onError={({ nativeEvent }) => {
+              console.warn('[Grandchild] Image load failed:', nativeEvent.error);
+              setPhotoFailed(true);
+            }}
           />
         ) : (
           // 없으면 이모지 (성별 따라)

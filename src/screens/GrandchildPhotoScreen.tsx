@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,7 +17,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { uploadImage, resolveImageUrl } from '../api/files';
+import { uploadImage, imageSource } from '../api/files';
 import type { SettingsStackParamList } from '../navigation/AppNavigator';
 
 type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'GrandchildPhoto'>;
@@ -39,6 +39,11 @@ const GrandchildPhotoScreen: React.FC = () => {
 
   const [isPicking, setIsPicking] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [userGrandchildPhotoUrl]);
 
   const requestAndroidPermission = async (
     source: 'camera' | 'gallery',
@@ -169,11 +174,15 @@ const GrandchildPhotoScreen: React.FC = () => {
 
       <View style={styles.content}>
         <View style={styles.previewWrap}>
-          {userGrandchildPhotoUrl ? (
+          {userGrandchildPhotoUrl && !photoFailed ? (
             <Image
-              source={{ uri: resolveImageUrl(userGrandchildPhotoUrl) }}
+              source={imageSource(userGrandchildPhotoUrl)}
               style={styles.preview}
               resizeMode="cover"
+              onError={({ nativeEvent }) => {
+                console.warn('[GrandchildPhoto] Image load failed:', nativeEvent.error);
+                setPhotoFailed(true);
+              }}
             />
           ) : (
             <View style={[styles.preview, styles.previewEmpty]}>

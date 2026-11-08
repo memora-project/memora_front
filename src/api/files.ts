@@ -1,4 +1,4 @@
-import { apiClient, extractApiErrorMessage } from './client';
+import { apiClient, DEFAULT_REQUEST_TIMEOUT_MS, extractApiErrorMessage, getAccessToken } from './client';
 import { API_BASE_URL } from '@env';
 
 /**
@@ -15,6 +15,18 @@ export const resolveImageUrl = (path: string | null | undefined): string => {
   if (path.startsWith('file://')) return path;
   if (path.startsWith('/')) return `${ORIGIN}${path}`;
   return `${ORIGIN}/${path}`;
+};
+
+export const imageSource = (path: string | null | undefined) => {
+  const uri = resolveImageUrl(path);
+  const token = getAccessToken();
+  if (path?.startsWith('/api/v1/files/images/') && token) {
+    // RN Android 0.85 reads request headers from the first item of an array
+    // source. An object source keeps the headers in src but does not set the
+    // native ImageView's top-level headers prop, resulting in HTTP 403.
+    return [{ uri, headers: { Authorization: `Bearer ${token}` } }];
+  }
+  return { uri };
 };
 
 /**
@@ -105,7 +117,7 @@ export const uploadImage = async (uri: string): Promise<string> => {
         headers: { 'Content-Type': 'multipart/form-data' },
         // 사진 업로드는 본문 + 네트워크 양쪽으로 시간이 걸리므로 client.ts 기본 타임아웃(15s)
         // 보다 넉넉하게.
-        timeout: 60000,
+        timeout: Math.max(60000, DEFAULT_REQUEST_TIMEOUT_MS),
       },
     );
     return data.url;

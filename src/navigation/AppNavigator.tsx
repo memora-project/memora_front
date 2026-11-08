@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import {
   NavigationContainer,
   type NavigatorScreenParams,
@@ -206,6 +206,20 @@ export type SettingsScreenProps = BottomTabScreenProps<RootTabParamList, 'Settin
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
+type TabIconProps = { color: string; size: number };
+const HomeTabIcon = ({ color }: TabIconProps) => (
+  <Icon name="home-outline" size={28} color={color} />
+);
+const DiaryTabIcon = ({ color }: TabIconProps) => (
+  <Icon name="book-outline" size={28} color={color} />
+);
+const ReportTabIcon = ({ color }: TabIconProps) => (
+  <Icon name="stats-chart-outline" size={28} color={color} />
+);
+const SettingsTabIcon = ({ color, size }: TabIconProps) => (
+  <Icon name="person-outline" size={size} color={color} />
+);
+
 const MainTabNavigator = () => {
   return (
     <Tab.Navigator
@@ -228,36 +242,28 @@ const MainTabNavigator = () => {
         name="Home"
         component={DiaryStackNavigator}
         options={{
-          tabBarIcon: ({ color }) => (
-            <Icon name="home-outline" size={28} color={color} />
-          ),
+          tabBarIcon: HomeTabIcon,
         }}
       />
       <Tab.Screen
         name="DiaryList"
         component={DiaryListStackNavigator}
         options={{
-          tabBarIcon: ({ color }) => (
-            <Icon name="book-outline" size={28} color={color} />
-          ),
+          tabBarIcon: DiaryTabIcon,
         }}
       />
       <Tab.Screen
         name="Report"
         component={ReportScreen}
         options={{
-          tabBarIcon: ({ color }) => (
-            <Icon name="stats-chart-outline" size={28} color={color} />
-          ),
+          tabBarIcon: ReportTabIcon,
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsStackNavigator}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="person-outline" size={size} color={color} />
-          ),
+          tabBarIcon: SettingsTabIcon,
         }}
       />
     </Tab.Navigator>
@@ -274,14 +280,7 @@ const AppNavigator = () => {
 
   if (isLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#FAF8F5',
-        }}
-      >
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2C2A28" />
       </View>
     );
@@ -301,5 +300,14 @@ const AppNavigator = () => {
 
   return <NavigationContainer>{content}</NavigationContainer>;
 };
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FAF8F5',
+  },
+});
 
 export default AppNavigator;

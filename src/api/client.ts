@@ -7,11 +7,13 @@ export interface ApiErrorPayload {
 }
 
 // Gemini 주 모델과 대체 모델 호출 시간을 모두 기다릴 수 있도록 AI 요청에만 적용.
-export const AI_REQUEST_TIMEOUT_MS = 120000;
+const IS_REMOTE_API = API_BASE_URL.startsWith('https://');
+export const DEFAULT_REQUEST_TIMEOUT_MS = IS_REMOTE_API ? 90000 : 15000;
+export const AI_REQUEST_TIMEOUT_MS = IS_REMOTE_API ? 180000 : 120000;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: DEFAULT_REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,6 +29,8 @@ let _refreshToken: string | null = null;
 export const setAccessToken = (token: string | null) => {
   _accessToken = token;
 };
+
+export const getAccessToken = (): string | null => _accessToken;
 
 /**
  * Refresh 토큰을 메모리에 보관 (401 응답 시 access 재발급에 사용).
@@ -83,12 +87,47 @@ const callRefresh = async () => {
     const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
       `${apiClient.defaults.baseURL}/auth/refresh`,
       { refreshToken: _refreshToken },
-      { headers: { 'Content-Type': 'application/json' }, timeout: 15000 },
+      { headers: { 'Content-Type': 'application/json' }, timeout: DEFAULT_REQUEST_TIMEOUT_MS },
     );
     return data;
   } catch {
     return null;
   }
+};
+
+/**
+ * Fetch binary resources with the same JWT refresh behavior as apiClient.
+ * React Native's native Image loader cannot reliably retry a protected image
+ * after an expired access token, so detail images use this helper first.
+ */
+export const fetchWithAuth = async (url: string): Promise<Response> => {
+  const request = (token: string | null) =>
+    fetch(url, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+  let response = await request(_accessToken);
+  if (response.status !== 401 || !_refreshToken) return response;
+
+  if (!refreshInFlight) {
+    refreshInFlight = callRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  const tokens = await refreshInFlight;
+  if (!tokens) {
+    setAccessToken(null);
+    setRefreshToken(null);
+    onAuthError?.();
+    return response;
+  }
+
+  setAccessToken(tokens.accessToken);
+  setRefreshToken(tokens.refreshToken);
+  onTokenRefreshed?.(tokens);
+  response = await request(tokens.accessToken);
+  return response;
 };
 
 apiClient.interceptors.response.use(

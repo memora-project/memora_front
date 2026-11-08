@@ -1,7 +1,7 @@
+import AuthenticatedImage from '../components/AuthenticatedImage';
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Image,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -257,8 +257,8 @@ const DetailScreen: React.FC<DetailScreenProps> = ({ navigation, route }) => {
                   </View>
 
                   {seg.photoUrl && (
-                    <Image
-                      source={{ uri: seg.photoUrl }}
+                    <AuthenticatedImage
+                      path={seg.photoUrl}
                       style={styles.segmentPhoto}
                       resizeMode="cover"
                     />

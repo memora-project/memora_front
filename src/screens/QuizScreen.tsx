@@ -10,7 +10,7 @@ import {
 import { Text } from '../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../contexts/SettingsContext';
-import { resolveImageUrl } from '../api/files';
+import { imageSource } from '../api/files';
 import {
   getQuiz,
   submitQuizAnswer,
@@ -153,7 +153,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ navigation }) => {
       >
         {/* 사진 */}
         <Image
-          source={{ uri: resolveImageUrl(quiz.photoUrl) }}
+          source={imageSource(quiz.photoUrl)}
           style={styles.photo}
           resizeMode="cover"
         />
