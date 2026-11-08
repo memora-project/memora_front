@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -36,10 +36,10 @@ const KAKAO_AUTH_URL = 'https://kauth.kakao.com/oauth/authorize';
 const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuccess }) => {
   const webRef = useRef<WebView>(null);
   const consumedRef = useRef(false);
+  const [redirecting, setRedirecting] = useState(false);
 
-  // 모달 열릴 때마다 한 번만 url 계산. consumed flag도 reset.
+  // 모달 열릴 때마다 한 번만 URL을 계산한다.
   const authUrl = useMemo(() => {
-    consumedRef.current = false;
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: KAKAO_REST_API_KEY ?? '',
@@ -50,6 +50,12 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuc
     // visible이 false→true로 바뀔 때만 다시 계산되도록 의존성에 visible 포함.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, scopes.join(',')]);
+
+  // 추가 동의 scope가 생기면 새 OAuth 페이지를 열 수 있도록 상태를 초기화한다.
+  useEffect(() => {
+    consumedRef.current = false;
+    setRedirecting(false);
+  }, [authUrl]);
 
   const tryConsumeRedirect = (url: string): boolean => {
     if (!url.startsWith(KAKAO_REDIRECT_URI ?? '__never__')) return false;
@@ -64,6 +70,10 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuc
     const error = params.get('error');
 
     if (code) {
+      // Android WebView는 콜백 URL로 실제 이동한 뒤에 이벤트를 전달할 수 있다.
+      // 토큰 교환 중에는 콜백의 403/404 페이지 대신 로딩 화면을 보여준다.
+      setRedirecting(true);
+      webRef.current?.stopLoading();
       onSuccess(code);
     } else {
       // error가 있거나 code도 error도 없는 비정상 상황 — 그냥 닫기.
@@ -117,6 +127,11 @@ const KakaoLoginModal: React.FC<Props> = ({ visible, scopes = [], onClose, onSuc
             <Text style={styles.errorBody}>
               .env에 KAKAO_REST_API_KEY와 KAKAO_REDIRECT_URI를 설정한 뒤 앱을 다시 실행해주세요.
             </Text>
+          </View>
+        ) : redirecting ? (
+          <View style={styles.redirectWrap}>
+            <ActivityIndicator color="#2C2A28" />
+            <Text style={styles.redirectText}>카카오 정보를 확인하고 있어요.</Text>
           </View>
         ) : (
           <WebView
@@ -221,6 +236,17 @@ const styles = StyleSheet.create({
     color: '#8A857F',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  redirectWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    backgroundColor: '#FAF8F5',
+  },
+  redirectText: {
+    color: '#8A857F',
+    fontSize: 14,
   },
 });
 
